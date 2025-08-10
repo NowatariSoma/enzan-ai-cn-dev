@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import warnings
+import os
 from typing import Dict, List, Optional, Tuple, Union
 from datetime import datetime
 import logging
@@ -34,7 +35,61 @@ class CSVDataLoader:
         self.DIFFERENCE_FROM_FINAL_CONVERGENCES = ['最終変位量との差分A', '最終変位量との差分B', '最終変位量との差分C', '最終変位量との差分D', '最終変位量との差分E', '最終変位量との差分F', '最終変位量との差分G', '最終変位量との差分H', '最終変位量との差分I']
         self.DIFFERENCE_FROM_FINAL_SETTLEMENTS = ['最終沈下量との差分1', '最終沈下量との差分2', '最終沈下量との差分3', '最終沈下量との差分4', '最終沈下量との差分5', '最終沈下量との差分6', '最終沈下量との差分7']
 
-    
+    def generate_file_paths(self, input_folder: str) -> Tuple[List[str], str, str]:
+        """
+        入力フォルダから必要なCSVファイルのパスを生成する
+        
+        Args:
+            input_folder (str): 入力フォルダのパス
+            
+        Returns:
+            Tuple[List[str], str, str]: 
+                - measurement_a_csvs: measurements_Aフォルダ内のCSVファイルパスのリスト
+                - cycle_support_csv: cycle_support.csvのパス
+                - observation_of_face_csv: observation_of_face.csvのパス
+                
+        Raises:
+            FileNotFoundError: 必要なフォルダやファイルが見つからない場合
+        """
+
+        # measurements_Aフォルダ内のCSVファイルを取得
+        measurements_a_dir = os.path.join(input_folder, 'measurements_A')
+        measurement_a_csvs = [
+            os.path.join(measurements_a_dir, f) 
+            for f in os.listdir(measurements_a_dir) 
+            if f.endswith('.csv')
+        ]
+        
+        # cycle_support.csvのパスを生成
+        cycle_support_csv = os.path.join(input_folder, 'cycle_support', 'cycle_support.csv')
+
+        # observation_of_face.csvのパスを生成
+        observation_of_face_csv = os.path.join(input_folder, 'observation_of_face', 'observation_of_face.csv')
+        
+        logger.info(f"ファイルパス生成完了: {len(measurement_a_csvs)}個のmeasurement_Aファイル, cycle_support.csv, observation_of_face.csv")
+        
+        return measurement_a_csvs, cycle_support_csv, observation_of_face_csv
+
+    def generate_additional_info_df(self, cycle_support_csv, observation_of_face_csv):
+        try:
+            df_cycle_support = pd.read_csv(cycle_support_csv).iloc[1:]
+        except:
+            df_cycle_support = pd.read_csv(cycle_support_csv, encoding='cp932').iloc[1:]
+        try:
+            df_observation_of_face = pd.read_csv(observation_of_face_csv)
+        except:
+            df_observation_of_face = pd.read_csv(observation_of_face_csv, encoding='cp932')
+        # Concatenate df_cycle_support and df_observation_of_face by their first columns
+        df_additional_info = pd.merge(
+            df_cycle_support, 
+            df_observation_of_face, 
+            left_on=df_cycle_support.columns[0], 
+            right_on=df_observation_of_face.columns[0], 
+            how='inner'
+        )
+        df_additional_info.drop(columns=[self.STA], inplace=True)
+        return df_additional_info
+
     def generate_dataframes(self, measurement_a_csvs, max_distance_from_face):
 
         df_all = []
