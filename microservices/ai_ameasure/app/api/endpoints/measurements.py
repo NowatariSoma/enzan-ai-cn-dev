@@ -17,6 +17,7 @@ import tempfile
 import json
 
 from app import schemas
+from app.schemas.measurements import TDDataPoint, DistanceDataResponse
 from app.core.config import settings
 from app.core.csv_loader import CSVDataLoader
 
@@ -737,6 +738,78 @@ async def generate_analysis_charts(
         logger.error(f"Error generating charts: {e}")
     
     return charts
+
+
+@router.get("/distance-data", response_model=DistanceDataResponse)
+async def get_distance_data(
+    folder_name: str = Query(default="01-hokkaido-akan", description="データフォルダ名"),
+    max_distance_from_face: float = Query(default=100.0, gt=0, description="切羽からの最大距離")
+) -> DistanceDataResponse:
+    """
+    dct_df_tdとsettlementsデータを取得してフロントエンドに表示
+    キャッシュされたデータフレームを利用して高速レスポンス
+    """
+    try:
+        from app.core.dataframe_cache import get_dataframe_cache
+        
+        # キャッシュからデータを取得
+        cache = get_dataframe_cache()
+        cached_data = cache.get_cached_data(folder_name, max_distance_from_face)
+        
+        if not cached_data:
+            raise HTTPException(status_code=404, detail=f"Failed to load data for folder: {folder_name}")
+        
+        # キャッシュからデータを展開
+        dct_df_td = cached_data['dct_df_td']
+        dct_df_settlement = cached_data['dct_df_settlement']
+        dct_df_convergence = cached_data['dct_df_convergence']
+        settlements = cached_data['settlements']
+        convergences = cached_data['convergences']
+        
+        # dct_df_tdをTDDataPointのリストに変換（パフォーマンス改善）
+        formatted_dct_df_td = {}
+        for distance_key, df in dct_df_td.items():
+            td_data_points = []
+            if not df.empty and csv_loader.TD_NO in df.columns:
+                # to_dict('records')でパフォーマンス向上
+                for row in df.to_dict('records'):
+                    # 各行から沈下量と変位量を抽出（リスト内包表記で高速化）
+                    settlement_values = [
+                        float(row[settle]) 
+                        for settle in settlements 
+                        if settle in row and pd.notna(row[settle])
+                    ]
+                    
+                    convergence_values = [
+                        float(row[conv])
+                        for conv in convergences
+                        if conv in row and pd.notna(row[conv])
+                    ]
+                    
+                    td_point = TDDataPoint(
+                        td=float(row[csv_loader.TD_NO]),
+                        settlements=settlement_values,
+                        convergences=convergence_values
+                    )
+                    td_data_points.append(td_point)
+            
+            formatted_dct_df_td[distance_key] = td_data_points
+        
+        # レスポンスを作成
+        return DistanceDataResponse(
+            dct_df_td=formatted_dct_df_td,
+            settlements=dct_df_settlement,
+            convergences=dct_df_convergence,
+            settlements_columns=settlements,
+            convergences_columns=convergences,
+            distances=list(dct_df_settlement.keys())
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_distance_data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/create-dataset")

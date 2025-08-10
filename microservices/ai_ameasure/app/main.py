@@ -1,13 +1,36 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import asyncio
+import logging
 
 from app.api.api import api_router
 from app.core.config import settings
+from app.core.dataframe_cache import get_dataframe_cache
+
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 起動時の処理
+    logger.info("Starting up - initializing dataframe cache...")
+    cache = get_dataframe_cache()
+    
+    # バックグラウンドでデータを事前読み込み（非ブロッキング）
+    asyncio.create_task(cache.preload_all_folders())
+    logger.info("Dataframe cache initialization started in background")
+    
+    yield
+    
+    # 終了時の処理
+    logger.info("Shutting down - clearing dataframe cache...")
+    cache.clear_cache()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan
 )
 
 # CORS設定

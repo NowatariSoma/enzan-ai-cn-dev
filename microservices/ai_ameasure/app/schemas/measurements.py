@@ -122,3 +122,20 @@ class ProcessedMeasurementResponse(BaseModel):
     stats: Dict[str, Any] = Field(..., description="統計情報")
     file_path: str = Field(..., description="処理したファイルのパス")
     processing_params: Dict[str, Any] = Field(..., description="処理パラメータ")
+
+
+class TDDataPoint(BaseModel):
+    """TD別のデータポイント"""
+    td: float = Field(..., description="TD値")
+    settlements: List[float] = Field(..., description="沈下量のリスト")
+    convergences: List[float] = Field(..., description="変位量のリスト")
+
+
+class DistanceDataResponse(BaseModel):
+    """距離別データのレスポンス"""
+    dct_df_td: Dict[str, List[TDDataPoint]] = Field(..., description="距離別のTDデータ")
+    settlements: Dict[str, List[float]] = Field(..., description="距離別の沈下量データ")
+    convergences: Dict[str, List[float]] = Field(..., description="距離別の変位量データ")
+    settlements_columns: List[str] = Field(..., description="沈下量のカラム名")
+    convergences_columns: List[str] = Field(..., description="変位量のカラム名")
+    distances: List[str] = Field(..., description="距離のリスト")

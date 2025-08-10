@@ -59,7 +59,7 @@ class CSVDataLoader:
             for f in os.listdir(measurements_a_dir) 
             if f.endswith('.csv')
         ]
-        
+
         # cycle_support.csvのパスを生成
         cycle_support_csv = os.path.join(input_folder, 'cycle_support', 'cycle_support.csv')
 
@@ -97,7 +97,7 @@ class CSVDataLoader:
             try:
                 df = self.proccess_a_measure_file(csv_file, max_distance_from_face)
             except Exception as e:
-                print(f"Error processing {csv_file}: {e}")
+                logger.error(f"Error processing {csv_file}: {e}")
                 continue
             df_all.append(df)
 

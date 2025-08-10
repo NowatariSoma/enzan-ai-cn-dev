@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import displacement, analysis, models, simulation, measurements, prediction, csv_processing, charts
+from app.api.endpoints import displacement, analysis, models, simulation, measurements, prediction, csv_processing, charts, cache_management
 
 api_router = APIRouter()
 
@@ -51,4 +51,10 @@ api_router.include_router(
     charts.router,
     prefix="/charts",
     tags=["charts", "visualization"]
+)
+
+api_router.include_router(
+    cache_management.router,
+    prefix="/cache",
+    tags=["cache-management"]
 )
