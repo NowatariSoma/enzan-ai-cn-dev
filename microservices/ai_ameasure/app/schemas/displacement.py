@@ -30,6 +30,22 @@ class DisplacementAnalysisResponse(BaseModel):
     feature_importance_b: List[Dict[str, Any]] = Field(..., description="特徴量重要度（B）")
 
 
+class LocalAnalysisRequest(BaseModel):
+    folder: str = Field(..., description="フォルダ名")
+    cycle_number: str = Field(..., description="サイクル番号（CSVファイル名）")
+    distance_from_face: float = Field(..., description="切羽からの距離")
+    daily_advance: float = Field(..., description="日進量 (m/day)")
+    max_distance: float = Field(100.0, description="最大距離")
+
+
+class LocalAnalysisResponse(BaseModel):
+    cycle_number: str = Field(..., description="サイクル番号")
+    td: float = Field(..., description="TD値")
+    prediction_data: List[Dict[str, Any]] = Field(..., description="予測データ")
+    simulation_data: List[Dict[str, Any]] = Field(..., description="シミュレーションデータ")
+    charts: Dict[str, str] = Field(..., description="生成されたチャートのパス")
+
+
 class ScatterData(BaseModel):
     actual: float
     predicted: float
@@ -44,3 +60,17 @@ class HeatmapData(BaseModel):
 class FeatureImportance(BaseModel):
     feature: str
     importance: float
+
+
+class ChartGenerationRequest(BaseModel):
+    folder: str = Field(..., description="フォルダ名")
+    chart_type: str = Field(..., description="チャートタイプ (settlement/convergence)")
+    cycle_number: Optional[str] = Field(None, description="サイクル番号")
+    include_predictions: bool = Field(True, description="予測値を含めるか")
+
+
+class ChartGenerationResponse(BaseModel):
+    chart_path: str = Field(..., description="チャートファイルのパス")
+    chart_type: str = Field(..., description="チャートタイプ")
+    data_points: int = Field(..., description="データポイント数")
+    generated_at: datetime = Field(default_factory=datetime.now)

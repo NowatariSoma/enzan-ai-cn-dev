@@ -105,3 +105,20 @@ class MeasurementPredictionsResponse(BaseModel):
     predictions: List[MeasurementPrediction]
     excavationAdvance: float
     distanceFromFace: float
+
+
+class ProcessMeasurementRequest(BaseModel):
+    """計測ファイル処理のリクエスト"""
+    file_path: str = Field(..., description="処理するCSVファイルのパス")
+    folder_name: str = Field(default="01-hokkaido-akan", description="データフォルダ名")
+    max_distance_from_face: float = Field(default=100.0, gt=0, description="切羽からの最大距離")
+    duration_days: int = Field(default=90, gt=0, description="解析対象期間（日数）")
+
+
+class ProcessedMeasurementResponse(BaseModel):
+    """処理済み計測データのレスポンス"""
+    data: List[Dict[str, Any]] = Field(..., description="処理済みデータ")
+    columns: List[str] = Field(..., description="データのカラム名リスト")
+    stats: Dict[str, Any] = Field(..., description="統計情報")
+    file_path: str = Field(..., description="処理したファイルのパス")
+    processing_params: Dict[str, Any] = Field(..., description="処理パラメータ")

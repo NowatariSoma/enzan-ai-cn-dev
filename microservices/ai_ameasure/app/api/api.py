@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import displacement, analysis, models, simulation, measurements, prediction
+from app.api.endpoints import displacement, analysis, models, simulation, measurements, prediction, csv_processing, charts
 
 api_router = APIRouter()
 
@@ -39,4 +39,16 @@ api_router.include_router(
     prediction.router,
     prefix="/prediction",
     tags=["prediction", "machine-learning"]
+)
+
+api_router.include_router(
+    csv_processing.router,
+    prefix="/csv",
+    tags=["csv-processing"]
+)
+
+api_router.include_router(
+    charts.router,
+    prefix="/charts",
+    tags=["charts", "visualization"]
 )

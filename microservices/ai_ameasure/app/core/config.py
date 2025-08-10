@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 from pathlib import Path
+import os
 
 
 class Settings(BaseSettings):
@@ -15,9 +16,9 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB
     UPLOAD_DIR: Path = Path("/tmp/ai_ameasure_uploads")
     
-    # データフォルダ設定
-    DATA_FOLDER: Path = Path("/home/nowatari/repos/enzan-koubou/ai-cn/data_folder")
-    OUTPUT_FOLDER: Path = Path("/home/nowatari/repos/enzan-koubou/ai-cn/output")
+    # データフォルダ設定（環境変数でオーバーライド可能）
+    DATA_FOLDER: Path = Path(os.getenv("DATA_FOLDER", "/app/data"))
+    OUTPUT_FOLDER: Path = Path(os.getenv("OUTPUT_FOLDER", "/app/output"))
     
     # モデル設定
     MODELS_DIR: Path = Path(__file__).parent.parent.parent.parent.parent / "ai_ameasure" / "app" / "models"

@@ -49,7 +49,9 @@ from .measurements import (
     MeasurementFilesResponse,
     MeasurementAnalysisRequest,
     MeasurementPrediction,
-    MeasurementPredictionsResponse
+    MeasurementPredictionsResponse,
+    ProcessMeasurementRequest,
+    ProcessedMeasurementResponse
 )
 
 __all__ = [
@@ -100,5 +102,7 @@ __all__ = [
     "MeasurementFilesResponse",
     "MeasurementAnalysisRequest",
     "MeasurementPrediction",
-    "MeasurementPredictionsResponse"
+    "MeasurementPredictionsResponse",
+    "ProcessMeasurementRequest",
+    "ProcessedMeasurementResponse"
 ]
