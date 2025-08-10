@@ -1,0 +1,42 @@
+models:
+  settlement:
+    type: random_forest
+    params:
+      n_estimators: 100
+      max_depth: 10
+      random_state: 42
+    save_path: ./output/model_settlement.pkl
+    
+  convergence:
+    type: random_forest
+    params:
+      n_estimators: 100
+      max_depth: 10
+      random_state: 42
+    save_path: ./output/model_convergence.pkl
+    
+  final_settlement:
+    type: hist_gradient_boosting
+    params:
+      max_iter: 100
+      learning_rate: 0.1
+      random_state: 42
+    save_path: ./output/model_final_settlement.pkl
+    
+  final_convergence:
+    type: hist_gradient_boosting
+    params:
+      max_iter: 100
+      learning_rate: 0.1
+      random_state: 42
+    save_path: ./output/model_final_convergence.pkl
+
+available_model_types:
+  - random_forest
+  - linear_regression
+  - svr
+  - hist_gradient_boosting
+  - mlp
+
+output_dir: ./output
+model_version: "2.0.0"
