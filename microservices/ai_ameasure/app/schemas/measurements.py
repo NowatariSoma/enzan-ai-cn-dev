@@ -139,3 +139,4 @@ class DistanceDataResponse(BaseModel):
     settlements_columns: List[str] = Field(..., description="沈下量のカラム名")
     convergences_columns: List[str] = Field(..., description="変位量のカラム名")
     distances: List[str] = Field(..., description="距離のリスト")
+    df_all: List[Dict[str, Any]] = Field(..., description="全計測データ")

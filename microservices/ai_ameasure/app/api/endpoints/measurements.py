@@ -760,6 +760,7 @@ async def get_distance_data(
             raise HTTPException(status_code=404, detail=f"Failed to load data for folder: {folder_name}")
         
         # キャッシュからデータを展開
+        df_all = cached_data['df_all']
         dct_df_td = cached_data['dct_df_td']
         dct_df_settlement = cached_data['dct_df_settlement']
         dct_df_convergence = cached_data['dct_df_convergence']
@@ -795,6 +796,17 @@ async def get_distance_data(
             
             formatted_dct_df_td[distance_key] = td_data_points
         
+        # df_allをJSONシリアライズ可能な形式に変換（NaN/Inf対策）
+        df_all_records = []
+        for _, row in df_all.iterrows():
+            clean_row = {}
+            for col, val in row.items():
+                if pd.isna(val) or (isinstance(val, float) and np.isinf(val)):
+                    clean_row[col] = None
+                else:
+                    clean_row[col] = val
+            df_all_records.append(clean_row)
+        
         # レスポンスを作成
         return DistanceDataResponse(
             dct_df_td=formatted_dct_df_td,
@@ -802,7 +814,8 @@ async def get_distance_data(
             convergences=dct_df_convergence,
             settlements_columns=settlements,
             convergences_columns=convergences,
-            distances=list(dct_df_settlement.keys())
+            distances=list(dct_df_settlement.keys()),
+            df_all=df_all_records
         )
         
     except HTTPException:
