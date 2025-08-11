@@ -106,12 +106,12 @@ export function useMeasurementsData() {
     const minBin = Math.floor(globalMin);
     const maxBin = Math.ceil(globalMax) + 1; // Pythonのrange(..., max+2)と同等
     
-    // 0.5mm刻みでビンを生成（より細かい分割）
-    const binSize = 0.5;
+    // 1mm刻みでビンを生成
+    const binSize = 1.0;
     for (let bin = minBin; bin < maxBin; bin += binSize) {
       const binStart = bin;
       const binEnd = bin + binSize;
-      const range = `${binStart.toFixed(1)}~${binEnd.toFixed(1)}`;
+      const range = `${binStart.toFixed(0)}~${binEnd.toFixed(0)}`;
       
       const point: DistributionDataPoint = {
         range,

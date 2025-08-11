@@ -9,10 +9,11 @@ import { useMeasurementsData } from '../hooks/useMeasurementsData';
 
 // カスタムバーシェイプ - 全シリーズを同じ位置に重ねて描画
 const CustomOverlayShape = (props: any) => {
-  const { fill, x, y, width, height, payload } = props;
+  const { fill, x, y, width, height, payload, background } = props;
   
   const allDataKeys = ['series3m', 'series5m', 'series10m', 'series20m', 'series50m', 'series100m'];
   const colors = ['#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#6B7280'];
+  
   
   return (
     <g>
@@ -20,9 +21,9 @@ const CustomOverlayShape = (props: any) => {
         const value = payload[key];
         if (!value || value === 0) return null;
         
-        // 各シリーズの高さを計算
-        const maxValue = Math.max(...allDataKeys.map(k => payload[k] || 0));
-        const barHeight = (value / maxValue) * height;
+        // 各バーの高さを値に比例して計算
+        // heightは最大値（series3m）のバーの高さなので、各値に応じて調整
+        const barHeight = (value / payload.series3m) * height;
         const barY = y + height - barHeight;
         
         return (
