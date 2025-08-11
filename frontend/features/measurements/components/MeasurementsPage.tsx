@@ -4,8 +4,42 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/layout
 import { Skeleton } from '@/components/ui/feedback/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/feedback/alert';
 import { AlertCircle } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ScatterChart, Scatter, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ScatterChart, Scatter, Cell, Rectangle } from 'recharts';
 import { useMeasurementsData } from '../hooks/useMeasurementsData';
+
+// カスタムバーシェイプ - 全シリーズを同じ位置に重ねて描画
+const CustomOverlayShape = (props: any) => {
+  const { fill, x, y, width, height, payload } = props;
+  
+  const allDataKeys = ['series3m', 'series5m', 'series10m', 'series20m', 'series50m', 'series100m'];
+  const colors = ['#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#6B7280'];
+  
+  return (
+    <g>
+      {allDataKeys.map((key, index) => {
+        const value = payload[key];
+        if (!value || value === 0) return null;
+        
+        // 各シリーズの高さを計算
+        const maxValue = Math.max(...allDataKeys.map(k => payload[k] || 0));
+        const barHeight = (value / maxValue) * height;
+        const barY = y + height - barHeight;
+        
+        return (
+          <Rectangle
+            key={key}
+            x={x}
+            y={barY}
+            width={width}
+            height={barHeight}
+            fill={colors[index]}
+            fillOpacity={0.5}
+          />
+        );
+      })}
+    </g>
+  );
+};
 
 // Color bar component
 const ColorBar = () => {
@@ -202,142 +236,75 @@ export function MeasurementsPage() {
               <ChartSkeleton />
             ) : (
               <>
-                <div className="relative" style={{ height: '300px' }}>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={displacementDistribution}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                        <XAxis 
-                          dataKey="range" 
-                          stroke="#6B7280"
-                          label={{ value: '変位量 (mm)', position: 'insideBottom', offset: -5 }}
-                        />
-                        <YAxis 
-                          stroke="#6B7280"
-                          label={{ value: '頻度', angle: -90, position: 'insideLeft' }}
-                          domain={[0, 100]}
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series3m" fill="#3B82F6" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={displacementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series5m" fill="#F59E0B" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={displacementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series10m" fill="#10B981" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={displacementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series20m" fill="#EF4444" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={displacementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series50m" fill="#8B5CF6" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={displacementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series100m" fill="#6B7280" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={displacementDistribution} margin={{ top: 5, right: 5, left: 30, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                    <XAxis 
+                      dataKey="range" 
+                      stroke="#6B7280"
+                      label={{ value: '変位量 (mm)', position: 'insideBottom', offset: -5 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                      interval={Math.floor(displacementDistribution.length / 20)}
+                    />
+                    <YAxis 
+                      stroke="#6B7280"
+                      label={{ value: '頻度', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                      content={({ active, payload, label }: any) => {
+                        if (active && payload && payload.length > 0) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="p-2 bg-white rounded shadow">
+                              <p className="font-semibold">{label}</p>
+                              <p style={{ color: '#3B82F6' }}>3m: {data.series3m || 0}</p>
+                              <p style={{ color: '#F59E0B' }}>5m: {data.series5m || 0}</p>
+                              <p style={{ color: '#10B981' }}>10m: {data.series10m || 0}</p>
+                              <p style={{ color: '#EF4444' }}>20m: {data.series20m || 0}</p>
+                              <p style={{ color: '#8B5CF6' }}>50m: {data.series50m || 0}</p>
+                              <p style={{ color: '#6B7280' }}>100m: {data.series100m || 0}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {/* カスタムシェイプを使用して全シリーズを重ねて描画 */}
+                    <Bar dataKey="series3m" shape={CustomOverlayShape} />
+                  </BarChart>
+                </ResponsiveContainer>
+                {/* 凡例 */}
                 <div className="flex justify-center mt-4 space-x-4">
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-blue-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-blue-500 opacity-50 mr-2"></div>
                     <span className="text-sm">3m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-yellow-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-yellow-500 opacity-50 mr-2"></div>
                     <span className="text-sm">5m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-green-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-green-500 opacity-50 mr-2"></div>
                     <span className="text-sm">10m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-red-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-red-500 opacity-50 mr-2"></div>
                     <span className="text-sm">20m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-purple-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-purple-500 opacity-50 mr-2"></div>
                     <span className="text-sm">50m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-gray-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-gray-500 opacity-50 mr-2"></div>
                     <span className="text-sm">100m</span>
                   </div>
                 </div>
@@ -359,142 +326,75 @@ export function MeasurementsPage() {
               <ChartSkeleton />
             ) : (
               <>
-                <div className="relative" style={{ height: '300px' }}>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={settlementDistribution}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                        <XAxis 
-                          dataKey="range" 
-                          stroke="#6B7280"
-                          label={{ value: '沈下量 (mm)', position: 'insideBottom', offset: -5 }}
-                        />
-                        <YAxis 
-                          stroke="#6B7280"
-                          label={{ value: '頻度', angle: -90, position: 'insideLeft' }}
-                          domain={[0, 100]}
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series3m" fill="#3B82F6" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={settlementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series5m" fill="#F59E0B" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={settlementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series10m" fill="#10B981" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={settlementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series20m" fill="#EF4444" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={settlementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series50m" fill="#8B5CF6" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="absolute inset-0">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={settlementDistribution}>
-                        <XAxis dataKey="range" stroke="transparent" tick={false} axisLine={false} />
-                        <YAxis stroke="transparent" tick={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                        />
-                        <Bar dataKey="series100m" fill="#6B7280" fillOpacity={0.6} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={settlementDistribution} margin={{ top: 5, right: 5, left: 30, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                    <XAxis 
+                      dataKey="range" 
+                      stroke="#6B7280"
+                      label={{ value: '沈下量 (mm)', position: 'insideBottom', offset: -5 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                      interval={Math.floor(settlementDistribution.length / 20)}
+                    />
+                    <YAxis 
+                      stroke="#6B7280"
+                      label={{ value: '頻度', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                      content={({ active, payload, label }: any) => {
+                        if (active && payload && payload.length > 0) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="p-2 bg-white rounded shadow">
+                              <p className="font-semibold">{label}</p>
+                              <p style={{ color: '#3B82F6' }}>3m: {data.series3m || 0}</p>
+                              <p style={{ color: '#F59E0B' }}>5m: {data.series5m || 0}</p>
+                              <p style={{ color: '#10B981' }}>10m: {data.series10m || 0}</p>
+                              <p style={{ color: '#EF4444' }}>20m: {data.series20m || 0}</p>
+                              <p style={{ color: '#8B5CF6' }}>50m: {data.series50m || 0}</p>
+                              <p style={{ color: '#6B7280' }}>100m: {data.series100m || 0}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {/* カスタムシェイプを使用して全シリーズを重ねて描画 */}
+                    <Bar dataKey="series3m" shape={CustomOverlayShape} />
+                  </BarChart>
+                </ResponsiveContainer>
+                {/* 凡例 */}
                 <div className="flex justify-center mt-4 space-x-4">
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-blue-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-blue-500 opacity-50 mr-2"></div>
                     <span className="text-sm">3m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-yellow-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-yellow-500 opacity-50 mr-2"></div>
                     <span className="text-sm">5m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-green-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-green-500 opacity-50 mr-2"></div>
                     <span className="text-sm">10m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-red-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-red-500 opacity-50 mr-2"></div>
                     <span className="text-sm">20m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-purple-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-purple-500 opacity-50 mr-2"></div>
                     <span className="text-sm">50m</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-4 bg-gray-500 opacity-60 mr-2"></div>
+                    <div className="w-4 h-4 bg-gray-500 opacity-50 mr-2"></div>
                     <span className="text-sm">100m</span>
                   </div>
                 </div>

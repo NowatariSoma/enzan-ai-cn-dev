@@ -60,6 +60,21 @@ export interface TunnelScatterResponse {
   color_scale: string;
 }
 
+export interface TDDataPoint {
+  td: number;
+  settlements: number[];
+  convergences: number[];
+}
+
+export interface DistanceDataResponse {
+  dct_df_td: { [key: string]: TDDataPoint[] };
+  settlements: { [key: string]: number[] };
+  convergences: { [key: string]: number[] };
+  settlements_columns: string[];
+  convergences_columns: string[];
+  distances: string[];
+}
+
 export class MeasurementsAPI {
   private baseUrl: string;
 
@@ -103,6 +118,19 @@ export class MeasurementsAPI {
     const response = await fetch(`${this.baseUrl}/measurements/tunnel-scatter?num_points=${numPoints}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch tunnel scatter data: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async getDistanceData(
+    folderName: string = '01-hokkaido-akan',
+    maxDistanceFromFace: number = 100
+  ): Promise<DistanceDataResponse> {
+    const response = await fetch(
+      `${this.baseUrl}/measurements/distance-data?folder_name=${folderName}&max_distance_from_face=${maxDistanceFromFace}`
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch distance data: ${response.statusText}`);
     }
     return response.json();
   }
