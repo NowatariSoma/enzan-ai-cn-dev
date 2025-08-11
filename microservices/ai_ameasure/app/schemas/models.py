@@ -25,6 +25,12 @@ class ModelTrainResponse(BaseModel):
     train_score: float = Field(..., description="訓練スコア")
     validation_score: Optional[float] = Field(None, description="検証スコア")
     feature_importance: Optional[Dict[str, float]] = Field(None, description="特徴量重要度")
+    metrics: Optional[Dict[str, float]] = Field(None, description="詳細メトリクス")
+    scatter_train: Optional[str] = Field(None, description="訓練データの散布図（Base64）")
+    scatter_validate: Optional[str] = Field(None, description="検証データの散布図（Base64）")
+    feature_importance_plot: Optional[str] = Field(None, description="特徴量重要度のプロット（Base64）")
+    train_predictions: Optional[List[float]] = Field(None, description="訓練データの予測値")
+    validate_predictions: Optional[List[float]] = Field(None, description="検証データの予測値")
 
 
 class ModelPredictRequest(BaseModel):

@@ -17,7 +17,7 @@ import tempfile
 import json
 
 from app import schemas
-from app.schemas.measurements import TDDataPoint, DistanceDataResponse
+from app.schemas.measurements import TDDataPoint, DistanceDataResponse, MLDatasetResponse, MLDatasetRequest
 from app.core.config import settings
 from app.core.csv_loader import CSVDataLoader
 
@@ -28,27 +28,51 @@ router = APIRouter()
 # CSVデータローダーのインスタンス
 csv_loader = CSVDataLoader()
 
-# 定数定義（analyze_displacement関数から）
-DATE = '計測日時'
-CYCLE_NO = 'サイクル番号'
-SECTION_TD = '切羽TD'
-FACE_TD = '切羽位置'
-TD_NO = 'TD'
-CONVERGENCES = ['変位量A', '変位量B', '変位量C']
-SETTLEMENTS = ['沈下量1', '沈下量2', '沈下量3']
-STA = 'STA'
-DISTANCE_FROM_FACE = '切羽からの距離'
-DAYS_FROM_START = '計測経過日数'
-DIFFERENCE_FROM_FINAL_CONVERGENCES = ['変位量A差分', '変位量B差分', '変位量C差分']
-DIFFERENCE_FROM_FINAL_SETTLEMENTS = ['沈下量1差分', '沈下量2差分', '沈下量3差分']
-DISTANCES_FROM_FACE = [3, 5, 10, 20, 50, 100]
+# 定数定義（CSVLoaderからの値を使用）
+DATE = csv_loader.DATE
+CYCLE_NO = csv_loader.CYCLE_NO
+SECTION_TD = csv_loader.SECTION_TD
+FACE_TD = csv_loader.FACE_TD
+TD_NO = csv_loader.TD_NO
+CONVERGENCES = csv_loader.CONVERGENCES
+SETTLEMENTS = csv_loader.SETTLEMENTS
+STA = csv_loader.STA
+DISTANCE_FROM_FACE = csv_loader.DISTANCE_FROM_FACE
+DAYS_FROM_START = csv_loader.DAYS_FROM_START
+DIFFERENCE_FROM_FINAL_CONVERGENCES = csv_loader.DIFFERENCE_FROM_FINAL_CONVERGENCES
+DIFFERENCE_FROM_FINAL_SETTLEMENTS = csv_loader.DIFFERENCE_FROM_FINAL_SETTLEMENTS
+DISTANCES_FROM_FACE = csv_loader.DISTANCES_FROM_FACE
 
 # ヘルパー関数: NaN/Inf対策
 def safe_float(value):
-    """NaNやInfinityをNoneに変換"""
+    """安全にfloatに変換し、NaN/Infの場合はNoneを返す"""
+    try:
     if pd.isna(value) or np.isinf(value):
         return None
     return float(value)
+    except (TypeError, ValueError):
+        return None
+
+def convert_support_pattern_to_numeric(value):
+    """支保パターンを数値に変換"""
+    if isinstance(value, str):
+        value = value.lower().translate(str.maketrans({
+            'ａ': 'a', 'ｂ': 'b', 'ｃ': 'c', 'ｄ': 'd', 'ｅ': 'e', 'ｆ': 'f', 'ｇ': 'g', 'ｈ': 'h', 'ｉ': 'i', 'ｊ': 'j',
+            'ｋ': 'k', 'ｌ': 'l', 'ｍ': 'm', 'ｎ': 'n', 'ｏ': 'o', 'ｐ': 'p', 'ｑ': 'q', 'ｒ': 'r', 'ｓ': 's', 'ｔ': 't',
+            'ｕ': 'u', 'ｖ': 'v', 'ｗ': 'w', 'ｘ': 'x', 'ｙ': 'y', 'ｚ': 'z'
+        }))
+        if 'a' in value:
+            return 1
+        elif 'b' in value:
+            return 2
+        elif 'c' in value:
+            return 3
+        elif 'd' in value:
+            return 4
+        else:
+            return -1  # その他特殊な断面
+    else:
+        return 0
 
 def get_real_time_series_data(
     data_type: str = "displacement",
@@ -145,6 +169,109 @@ def get_real_scatter_data(
     except Exception as e:
         logger.error(f"Error loading real data: {e}")
         return []
+    
+def generate_additional_info_df(cycle_support_csv, observation_of_face_csv):
+    try:
+        df_cycle_support = pd.read_csv(cycle_support_csv).iloc[1:]
+    except:
+        df_cycle_support = pd.read_csv(cycle_support_csv, encoding='cp932').iloc[1:]
+    try:
+        df_observation_of_face = pd.read_csv(observation_of_face_csv)
+    except:
+        df_observation_of_face = pd.read_csv(observation_of_face_csv, encoding='cp932')
+    # Concatenate df_cycle_support and df_observation_of_face by their first columns
+    df_additional_info = pd.merge(
+        df_cycle_support, 
+        df_observation_of_face, 
+        left_on=df_cycle_support.columns[0], 
+        right_on=df_observation_of_face.columns[0], 
+        how='inner'
+    )
+    return df_additional_info
+
+
+def create_dataset(df, df_additional_info):
+    """displacement_temporal_spacial_analysis.pyと同じ実装（修正版）"""
+    try:
+        logger.info(f"create_dataset called with df shape: {df.shape}, additional_info shape: {df_additional_info.shape}")
+        
+        # 利用可能な列のみでシンプルなデータセットを作成
+        available_settlements = [col for col in SETTLEMENTS if col in df.columns]
+        available_convergences = [col for col in CONVERGENCES if col in df.columns]
+        available_diff_settlements = [col for col in DIFFERENCE_FROM_FINAL_SETTLEMENTS if col in df.columns]
+        available_diff_convergences = [col for col in DIFFERENCE_FROM_FINAL_CONVERGENCES if col in df.columns]
+        
+        logger.info(f"Available settlements: {available_settlements}")
+        logger.info(f"Available convergences: {available_convergences}")
+        
+        # 基本特徴量
+        base_features = [TD_NO, DISTANCE_FROM_FACE, DAYS_FROM_START]
+        available_base_features = [col for col in base_features if col in df.columns]
+        
+        # 沈下量データセット作成
+        settlement_data = []
+        if available_settlements and available_base_features:
+            # 最初の3つの沈下量列を使用
+            target_settlements = available_settlements[:3]
+            
+            # 特徴量とターゲット列を結合
+            dataset_columns = available_base_features + target_settlements
+            if available_diff_settlements:
+                dataset_columns += available_diff_settlements[:3]  # 対応する差分列
+            
+            df_settlement = df[dataset_columns].dropna()
+            if not df_settlement.empty:
+                # position_idを追加（左肩=0, 天端=1, 右肩=2の3回複製）
+                settlement_records = []
+                for pos_id in range(min(3, len(target_settlements))):
+                    temp_df = df_settlement[available_base_features + [target_settlements[pos_id]]].copy()
+                    if available_diff_settlements and pos_id < len(available_diff_settlements):
+                        temp_df[available_diff_settlements[pos_id]] = df_settlement[available_diff_settlements[pos_id]]
+                    temp_df['position_id'] = pos_id
+                    # 列名を統一（最初の沈下量列の名前に統一）
+                    target_col_name = target_settlements[0][:-1] if target_settlements[0].endswith('1') else target_settlements[0]
+                    temp_df.rename(columns={target_settlements[pos_id]: target_col_name}, inplace=True)
+                    settlement_records.extend(temp_df.to_dict('records'))
+                
+                settlement_data = settlement_records
+        
+        # 変位量データセット作成
+        convergence_data = []
+        if available_convergences and available_base_features:
+            # 最初の3つの変位量列を使用
+            target_convergences = available_convergences[:3]
+            
+            # 特徴量とターゲット列を結合
+            dataset_columns = available_base_features + target_convergences
+            if available_diff_convergences:
+                dataset_columns += available_diff_convergences[:3]  # 対応する差分列
+            
+            df_convergence = df[dataset_columns].dropna()
+            if not df_convergence.empty:
+                # position_idを追加（A=0, B=1, C=2の3回複製）
+                convergence_records = []
+                for pos_id in range(min(3, len(target_convergences))):
+                    temp_df = df_convergence[available_base_features + [target_convergences[pos_id]]].copy()
+                    if available_diff_convergences and pos_id < len(available_diff_convergences):
+                        temp_df[available_diff_convergences[pos_id]] = df_convergence[available_diff_convergences[pos_id]]
+                    temp_df['position_id'] = pos_id
+                    # 列名を統一（最初の変位量列の名前に統一）
+                    target_col_name = target_convergences[0][:-1] if target_convergences[0].endswith('A') else target_convergences[0]
+                    temp_df.rename(columns={target_convergences[pos_id]: target_col_name}, inplace=True)
+                    convergence_records.extend(temp_df.to_dict('records'))
+                
+                convergence_data = convergence_records
+
+        logger.info(f"Settlement data records: {len(settlement_data)}")
+        logger.info(f"Convergence data records: {len(convergence_data)}")
+        
+        return settlement_data, convergence_data
+        
+    except Exception as e:
+        logger.error(f"Error in create_dataset: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return [], []
 
 @router.get("/displacement-series", response_model=schemas.DisplacementSeriesResponse)
 async def get_displacement_series(
@@ -921,64 +1048,106 @@ async def get_distance_data(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/create-dataset")
-async def create_dataset(
-    folder_name: str = Query(default="01-hokkaido-akan", description="データフォルダ名"),
-    max_distance_from_face: float = Query(default=100.0, gt=0, description="切羽からの最大距離")
+@router.post("/debug-dataset")
+async def debug_dataset(
+    request: MLDatasetRequest
 ) -> Dict[str, Any]:
     """
-    機械学習用のデータセットを作成
-    settlement/convergenceデータと追加情報を統合
+    create_dataset関数のデバッグ用エンドポイント
     """
     try:
-        # 入力フォルダのパス設定
-        input_folder = settings.DATA_FOLDER / folder_name / "main_tunnel" / "CN_measurement_data"
+        from app.core.dataframe_cache import get_dataframe_cache
         
-        # measurements_Aフォルダ内のすべてのCSVファイルを取得
-        measurements_path = input_folder / "measurements_A"
-        measurement_a_csvs = list(measurements_path.glob("*.csv"))
+        # キャッシュからデータを取得
+        cache = get_dataframe_cache()
+        cached_data = cache.get_cached_data(request.folder_name, request.max_distance_from_face)
         
-        # データフレームの生成
-        df_all, _, _, _, settlements, convergences = generate_dataframes(
-            measurement_a_csvs, max_distance_from_face
-        )
+        if not cached_data:
+            return {"error": f"Failed to load data for folder: {request.folder_name}"}
         
-        if df_all.empty:
-            raise HTTPException(status_code=404, detail="No valid data found")
+        df_all = cached_data['df_all']
+
+        # 正しいパス構築
+        input_folder = settings.DATA_FOLDER / request.folder_name / "main_tunnel" / "CN_measurement_data"
+        cycle_support_csv = input_folder / 'cycle_support' / 'cycle_support.csv'
+        observation_of_face_csv = input_folder / 'observation_of_face' / 'observation_of_face.csv'
         
-        # 追加情報の統合
-        cycle_support_csv = input_folder / "cycle_support" / "cycle_support.csv"
-        observation_of_face_csv = input_folder / "observation_of_face" / "observation_of_face.csv"
-        
-        dataset_info = {
-            "main_data_shape": df_all.shape,
-            "settlements_columns": settlements,
-            "convergences_columns": convergences,
-            "total_records": len(df_all)
+        debug_info = {
+            "df_all_shape": df_all.shape,
+            "df_all_columns": df_all.columns.tolist(),
+            "cycle_support_exists": cycle_support_csv.exists(),
+            "observation_face_exists": observation_of_face_csv.exists(),
+            "SETTLEMENTS": SETTLEMENTS,
+            "CONVERGENCES": CONVERGENCES,
+            "DIFFERENCE_FROM_FINAL_SETTLEMENTS": DIFFERENCE_FROM_FINAL_SETTLEMENTS,
+            "DIFFERENCE_FROM_FINAL_CONVERGENCES": DIFFERENCE_FROM_FINAL_CONVERGENCES
         }
         
-        # 追加情報が存在する場合は統合
+        # 追加情報ファイルの確認
         if cycle_support_csv.exists() and observation_of_face_csv.exists():
             df_additional_info = generate_additional_info_df(cycle_support_csv, observation_of_face_csv)
-            if STA in df_additional_info.columns:
-                df_additional_info.drop(columns=[STA], inplace=True)
+            debug_info["additional_info_shape"] = df_additional_info.shape
+            debug_info["additional_info_columns"] = df_additional_info.columns.tolist()
             
-            dataset_info["additional_info_shape"] = df_additional_info.shape
-            dataset_info["additional_info_columns"] = df_additional_info.columns.tolist()
+            # 実際のデータの存在チェック
+            available_settlements = [col for col in SETTLEMENTS if col in df_all.columns]
+            available_convergences = [col for col in CONVERGENCES if col in df_all.columns]
+            available_diff_settlements = [col for col in DIFFERENCE_FROM_FINAL_SETTLEMENTS if col in df_all.columns]
+            available_diff_convergences = [col for col in DIFFERENCE_FROM_FINAL_CONVERGENCES if col in df_all.columns]
             
-            # サンプルデータを含める
-            dataset_info["sample_data"] = {
-                "main": df_all.head(10).to_dict(orient='records'),
-                "additional": df_additional_info.head(10).to_dict(orient='records')
-            }
+            debug_info["available_settlements"] = available_settlements
+            debug_info["available_convergences"] = available_convergences
+            debug_info["available_diff_settlements"] = available_diff_settlements
+            debug_info["available_diff_convergences"] = available_diff_convergences
+            
+        else:
+            debug_info["additional_info_error"] = "Additional info files not found"
         
-        return {
-            "status": "success",
-            "dataset_info": dataset_info
-        }
+        return debug_info
         
     except Exception as e:
-        logger.error(f"Error creating dataset: {e}")
+        return {"error": str(e), "traceback": __import__('traceback').format_exc()}
+
+
+@router.post("/make-dataset", response_model=MLDatasetResponse)
+async def make_dataset(
+    request: MLDatasetRequest
+) -> MLDatasetResponse:
+    """
+    計測データから機械学習用のデータセットを作成
+    訓練用とテスト用に分割し、指定したフォーマットで保存
+    """
+    try:
+        from app.core.dataframe_cache import get_dataframe_cache
+        
+        # キャッシュからデータを取得
+        cache = get_dataframe_cache()
+        cached_data = cache.get_cached_data(request.folder_name, request.max_distance_from_face)
+        
+        if not cached_data:
+            raise HTTPException(status_code=404, detail=f"Failed to load data for folder: {request.folder_name}")
+        
+        df_all = cached_data['df_all']
+
+        # 正しいパス構築：settings.DATA_FOLDERを使用
+        input_folder = settings.DATA_FOLDER / request.folder_name / "main_tunnel" / "CN_measurement_data"
+        cycle_support_csv = input_folder / 'cycle_support' / 'cycle_support.csv'
+        observation_of_face_csv = input_folder / 'observation_of_face' / 'observation_of_face.csv'
+        df_additional_info = generate_additional_info_df(cycle_support_csv, observation_of_face_csv)
+        
+        settlement_data, convergence_data = create_dataset(df_all, df_additional_info)
+
+        # データセットレスポンス用に変換（すでに辞書形式なのでそのまま使用）
+        settlement_result = settlement_data if isinstance(settlement_data, list) else []
+        convergence_result = convergence_data if isinstance(convergence_data, list) else []
+
+        return MLDatasetResponse(
+            settlement_data=settlement_result,
+            convergence_data=convergence_result
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in create_dataset: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-

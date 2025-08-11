@@ -140,3 +140,13 @@ class DistanceDataResponse(BaseModel):
     convergences_columns: List[str] = Field(..., description="変位量のカラム名")
     distances: List[str] = Field(..., description="距離のリスト")
     df_all: List[Dict[str, Any]] = Field(..., description="全計測データ")
+
+
+class MLDatasetResponse(BaseModel):
+    settlement_data: List[Dict[str, float]] = Field(..., description="沈下量データ")
+    convergence_data: List[Dict[str, float]] = Field(..., description="変位量データ")
+
+
+class MLDatasetRequest(BaseModel):
+    folder_name: str = Field(..., description="データフォルダ名")
+    max_distance_from_face: float = Field(..., description="切羽からの最大距離")

@@ -1,14 +1,19 @@
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List, Dict, Any
+from fastapi import APIRouter, HTTPException
+from typing import List, Dict, Any, Tuple
 import numpy as np
-from pathlib import Path
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import base64
+from io import BytesIO
 from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import mean_squared_error, r2_score
 
 from app import schemas
-from app.core.config import settings
 
 router = APIRouter()
 
@@ -62,6 +67,106 @@ async def get_models() -> schemas.ModelListResponse:
     return schemas.ModelListResponse(models=models)
 
 
+def analyze_ml(model, df_train: pd.DataFrame, df_validate: pd.DataFrame, 
+               x_columns: List[str], y_column: str) -> Tuple[pd.DataFrame, pd.DataFrame, Any, Dict]:
+    """
+    機械学習モデルの学習と評価を行う
+    """
+    try:
+        model.fit(df_train[x_columns], df_train[y_column])
+        y_pred_train = model.predict(df_train[x_columns])
+        y_pred_validate = model.predict(df_validate[x_columns])
+    except ValueError as e:
+        print(f"Error fitting model: {e}")
+        raise
+        
+    # Evaluate the model
+    mse_train = mean_squared_error(df_train[y_column].values, y_pred_train)
+    r2_train = r2_score(df_train[y_column].values, y_pred_train)
+    mse_validate = mean_squared_error(df_validate[y_column].values, y_pred_validate)
+    r2_validate = r2_score(df_validate[y_column].values, y_pred_validate)
+
+    df_train = df_train.copy()
+    df_validate = df_validate.copy()
+    df_train['pred'] = y_pred_train
+    df_validate['pred'] = y_pred_validate
+    
+    print(f"Mean Squared Error for train: {mse_train}")
+    print(f"R2 Score for train: {r2_train}")
+    print(f"Mean Squared Error for validate: {mse_validate}")
+    print(f"R2 Score for validate: {r2_validate}")
+
+    metrics = {
+        'mse_train': mse_train,
+        'r2_train': r2_train,
+        'mse_validate': mse_validate,
+        'r2_validate': r2_validate
+    }
+    return df_train, df_validate, model, metrics
+
+
+def draw_scatter_plot(gt: pd.Series, pred: pd.Series, label: str, metrics: Dict) -> str:
+    """
+    実測値と予測値の散布図を描画し、Base64エンコードされた画像を返す
+    """
+    plt.figure(figsize=(8, 8))
+    plt.scatter(gt, pred, alpha=0.5, label=label)
+    plt.plot([gt.min(), gt.max()],
+            [gt.min(), gt.max()],
+            color='red', linestyle='--', label='Ideal Fit')
+    plt.title(f"Actual vs Predicted ({label})")
+    plt.xlabel("Actual")
+    plt.ylabel("Predicted")
+    
+    # メトリクスのテキストを追加
+    if 'train' in label.lower():
+        text = f"MSE: {metrics['mse_train']:.2f}\nR2: {metrics['r2_train']:.2f}"
+    else:
+        text = f"MSE: {metrics['mse_validate']:.2f}\nR2: {metrics['r2_validate']:.2f}"
+    
+    plt.text(0.05, 0.95, text, 
+             transform=plt.gca().transAxes, fontsize=10, verticalalignment='top', 
+             bbox=dict(boxstyle="round", facecolor="white", alpha=0.5))
+    plt.legend()
+    plt.grid()
+    
+    # 画像をBase64にエンコード
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    plt.close()
+    
+    return image_base64
+
+
+def draw_feature_importance(model, x_columns: List[str]) -> str:
+    """
+    特徴量重要度のグラフを描画し、Base64エンコードされた画像を返す
+    """
+    if not hasattr(model, 'feature_importances_'):
+        return ""
+        
+    plt.figure(figsize=(10, 6))
+    feature_importances = model.feature_importances_
+    indices = np.argsort(feature_importances)[::-1]
+    plt.bar(range(len(x_columns)), feature_importances[indices], align='center')
+    plt.xticks(range(len(x_columns)), [x_columns[i] for i in indices], rotation=90)
+    plt.title("Feature Importances")
+    plt.xlabel("Features")
+    plt.ylabel("Importance")
+    plt.tight_layout()
+    
+    # 画像をBase64にエンコード
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    plt.close()
+    
+    return image_base64
+
+
 @router.post("/train", response_model=schemas.ModelTrainResponse)
 async def train_model(
     request: schemas.ModelTrainRequest
@@ -75,48 +180,63 @@ async def train_model(
     model_info = MOCK_MODELS[request.model_name]
     model = model_info["model"]
     
-    # モック訓練データを生成（実際の使用時はrequestから取得）
-    # ここでは簡単なモックデータを使用
-    n_samples = 100
+    # データの読み込み（実際の実装では request.data_path から読み込む）
+    # ここではモックデータを使用
+    n_samples = 1000
     n_features = len(request.feature_columns) if request.feature_columns else 5
+    feature_columns = request.feature_columns or [f"feature_{i}" for i in range(n_features)]
     
-    X = np.random.randn(n_samples, n_features)
-    y = np.random.randn(n_samples)
+    # モックデータフレームを作成
+    data = {col: np.random.randn(n_samples) for col in feature_columns}
+    data[request.target_column] = np.random.randn(n_samples)
+    df = pd.DataFrame(data)
     
-    # モデルを訓練
-    model.fit(X, y)
+    # データを訓練用と検証用に分割
+    train_idx = int(n_samples * 0.8)
+    df_train = df.iloc[:train_idx]
+    df_validate = df.iloc[train_idx:]
     
-    # 訓練スコアを計算
-    train_score = model.score(X, y)
+    # モデルの学習と評価
+    df_train, df_validate, model, metrics = analyze_ml(
+        model, df_train, df_validate, feature_columns, request.target_column
+    )
     
-    # 検証スコア（簡易版）
-    validation_score = train_score - 0.05 - np.random.random() * 0.05
+    # 散布図の生成
+    scatter_train = draw_scatter_plot(
+        df_train[request.target_column], 
+        df_train['pred'], 
+        'Train Data', 
+        metrics
+    )
+    scatter_validate = draw_scatter_plot(
+        df_validate[request.target_column],
+        df_validate['pred'],
+        'Validate Data',
+        metrics
+    )
     
-    # 特徴量重要度（対応するモデルの場合のみ）
+    # 特徴量重要度の取得
     feature_importance = {}
+    feature_importance_plot = ""
     if hasattr(model, 'feature_importances_'):
-        features = request.feature_columns or [f"feature_{i}" for i in range(n_features)]
-        for i, feature in enumerate(features):
+        for i, feature in enumerate(feature_columns):
             feature_importance[feature] = float(model.feature_importances_[i])
-    else:
-        # 特徴量重要度が利用できないモデルの場合
-        features = request.feature_columns or [f"feature_{i}" for i in range(n_features)]
-        for feature in features:
-            feature_importance[feature] = np.random.random() * 0.2
-        
-        # 正規化
-        total = sum(feature_importance.values())
-        if total > 0:
-            feature_importance = {k: v/total for k, v in feature_importance.items()}
+        feature_importance_plot = draw_feature_importance(model, feature_columns)
     
     # モデルを訓練済みに更新
     MOCK_MODELS[request.model_name]["is_fitted"] = True
     
     return schemas.ModelTrainResponse(
         model_name=request.model_name,
-        train_score=train_score,
-        validation_score=validation_score,
-        feature_importance=feature_importance
+        train_score=metrics['r2_train'],
+        validation_score=metrics['r2_validate'],
+        feature_importance=feature_importance,
+        metrics=metrics,
+        scatter_train=scatter_train,
+        scatter_validate=scatter_validate,
+        feature_importance_plot=feature_importance_plot,
+        train_predictions=df_train['pred'].tolist(),
+        validate_predictions=df_validate['pred'].tolist()
     )
 
 
