@@ -102,6 +102,46 @@ const ChartSkeleton = () => (
   </div>
 );
 
+// カスタムドット（小さいサイズ）
+const CustomDot = (props: any) => {
+  const { cx, cy, fill } = props;
+  return (
+    <circle cx={cx} cy={cy} r={2} fill={fill} />
+  );
+};
+
+// 値を色に変換するヘルパー関数
+const getColorFromValue = (value: number, min: number, max: number): string => {
+  // 正規化（0-1の範囲に変換）
+  const normalized = max > min ? (value - min) / (max - min) : 0.5;
+  
+  // JETカラーマップ風の色生成
+  let r, g, b;
+  if (normalized < 0.25) {
+    // 青から水色へ
+    r = 0;
+    g = Math.floor(normalized * 4 * 255);
+    b = 255;
+  } else if (normalized < 0.5) {
+    // 水色から緑へ
+    r = 0;
+    g = 255;
+    b = Math.floor((0.5 - normalized) * 4 * 255);
+  } else if (normalized < 0.75) {
+    // 緑から黄色へ
+    r = Math.floor((normalized - 0.5) * 4 * 255);
+    g = 255;
+    b = 0;
+  } else {
+    // 黄色から赤へ
+    r = 255;
+    g = Math.floor((1 - normalized) * 4 * 255);
+    b = 0;
+  }
+  
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
 export function MeasurementsPage() {
   const {
     displacementData,
@@ -109,9 +149,38 @@ export function MeasurementsPage() {
     displacementDistribution,
     settlementDistribution,
     scatterData,
+    convergenceScatterData,
+    settlementScatterData,
     loading,
     error
   } = useMeasurementsData();
+
+  // 変位量散布図データに色を追加
+  const convergenceScatterWithColor = convergenceScatterData.map(point => {
+    const min = Math.min(...convergenceScatterData.map(p => p.value));
+    const max = Math.max(...convergenceScatterData.map(p => p.value));
+    return {
+      ...point,
+      color: getColorFromValue(point.value, min, max)
+    };
+  });
+
+  // 沈下量散布図データに色を追加
+  const settlementScatterWithColor = settlementScatterData.map(point => {
+    const min = Math.min(...settlementScatterData.map(p => p.value));
+    const max = Math.max(...settlementScatterData.map(p => p.value));
+    return {
+      ...point,
+      color: getColorFromValue(point.value, min, max)
+    };
+  });
+
+  // デバッグ用ログ
+  console.log('Convergence scatter data points:', convergenceScatterData.length);
+  console.log('Settlement scatter data points:', settlementScatterData.length);
+  if (convergenceScatterData.length > 0) {
+    console.log('Sample convergence point:', convergenceScatterWithColor[0]);
+  }
 
 
   // Show error state
@@ -410,11 +479,11 @@ export function MeasurementsPage() {
           </CardContent>
         </Card>
 
-        {/* Tunnel Measurement Scatter Plot 1 */}
+        {/* Tunnel Measurement Scatter Plot 1 - 変位量 */}
         <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="text-xl font-semibold text-gray-800 text-center">
-              Scatter Plot of 切羽からの距離 vs 計測経過日数
+              Scatter Plot of 切羽からの距離 vs 計測経過日数 (変位量)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -425,19 +494,21 @@ export function MeasurementsPage() {
                 <div className="flex items-center">
                   <div className="flex-1">
                     <ResponsiveContainer width="100%" height={300}>
-                      <ScatterChart data={scatterData}>
+                      <ScatterChart data={convergenceScatterWithColor}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                         <XAxis 
+                          type="number"
                           dataKey="x" 
                           stroke="#6B7280" 
                           label={{ value: '切羽からの距離 (m)', position: 'insideBottom', offset: -5 }}
                           domain={[0, 100]}
                         />
                         <YAxis 
+                          type="number"
                           dataKey="y" 
                           stroke="#6B7280" 
                           label={{ value: '計測経過日数', angle: -90, position: 'insideLeft' }}
-                          domain={[0, 100]}
+                          domain={[0, 90]}
                         />
                         <Tooltip 
                           contentStyle={{ 
@@ -449,15 +520,22 @@ export function MeasurementsPage() {
                           formatter={(value, name) => [
                             name === 'x' ? `${typeof value === 'number' ? value.toFixed(1) : value}m` : 
                             name === 'y' ? `${typeof value === 'number' ? value.toFixed(1) : value}日` : 
+                            name === 'value' ? `${typeof value === 'number' ? value.toFixed(2) : value}mm` :
                             typeof value === 'number' ? value.toFixed(1) : value,
                             name === 'x' ? '距離' : 
                             name === 'y' ? '日数' : 
-                            '深度'
+                            name === 'value' ? '変位量' :
+                            '値'
                           ]}
                         />
-                        <Scatter dataKey="y" fill="#3B82F6">
-                          {scatterData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Scatter 
+                          name="散布図" 
+                          data={convergenceScatterWithColor} 
+                          fill="#3B82F6" 
+                          shape={<CustomDot />}
+                        >
+                          {convergenceScatterWithColor.map((entry, index) => (
+                            <Cell key={`cell-conv-${index}`} fill={entry.color} />
                           ))}
                         </Scatter>
                       </ScatterChart>
@@ -465,17 +543,17 @@ export function MeasurementsPage() {
                   </div>
                   <ColorBar />
                 </div>
-                <p className="text-sm text-gray-500 text-center mt-2">トンネル計測データ分布</p>
+                <p className="text-sm text-gray-500 text-center mt-2">変位量による色分け (mm)</p>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Tunnel Measurement Scatter Plot 2 */}
+        {/* Tunnel Measurement Scatter Plot 2 - 沈下量 */}
         <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="text-xl font-semibold text-gray-800 text-center">
-              Scatter Plot of 切羽からの距離 vs 計測経過日数
+              Scatter Plot of 切羽からの距離 vs 計測経過日数 (沈下量)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -486,19 +564,21 @@ export function MeasurementsPage() {
                 <div className="flex items-center">
                   <div className="flex-1">
                     <ResponsiveContainer width="100%" height={300}>
-                      <ScatterChart data={scatterData}>
+                      <ScatterChart data={settlementScatterWithColor}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                         <XAxis 
+                          type="number"
                           dataKey="x" 
                           stroke="#6B7280" 
                           label={{ value: '切羽からの距離 (m)', position: 'insideBottom', offset: -5 }}
                           domain={[0, 100]}
                         />
                         <YAxis 
+                          type="number"
                           dataKey="y" 
                           stroke="#6B7280" 
                           label={{ value: '計測経過日数', angle: -90, position: 'insideLeft' }}
-                          domain={[0, 100]}
+                          domain={[0, 90]}
                         />
                         <Tooltip 
                           contentStyle={{ 
@@ -510,15 +590,22 @@ export function MeasurementsPage() {
                           formatter={(value, name) => [
                             name === 'x' ? `${typeof value === 'number' ? value.toFixed(1) : value}m` : 
                             name === 'y' ? `${typeof value === 'number' ? value.toFixed(1) : value}日` : 
+                            name === 'value' ? `${typeof value === 'number' ? value.toFixed(2) : value}mm` :
                             typeof value === 'number' ? value.toFixed(1) : value,
                             name === 'x' ? '距離' : 
                             name === 'y' ? '日数' : 
-                            '深度'
+                            name === 'value' ? '沈下量' :
+                            '値'
                           ]}
                         />
-                        <Scatter dataKey="y" fill="#3B82F6">
-                          {scatterData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Scatter 
+                          name="散布図" 
+                          data={settlementScatterWithColor} 
+                          fill="#3B82F6" 
+                          shape={<CustomDot />}
+                        >
+                          {settlementScatterWithColor.map((entry, index) => (
+                            <Cell key={`cell-settle-${index}`} fill={entry.color} />
                           ))}
                         </Scatter>
                       </ScatterChart>
@@ -526,7 +613,7 @@ export function MeasurementsPage() {
                   </div>
                   <ColorBar />
                 </div>
-                <p className="text-sm text-gray-500 text-center mt-2">トンネル計測データ分布</p>
+                <p className="text-sm text-gray-500 text-center mt-2">沈下量による色分け (mm)</p>
               </>
             )}
           </CardContent>

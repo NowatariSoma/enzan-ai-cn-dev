@@ -740,6 +740,102 @@ async def generate_analysis_charts(
     return charts
 
 
+@router.get("/scatter-plot-data")
+async def get_scatter_plot_data(
+    folder_name: str = Query(default="01-hokkaido-akan", description="データフォルダ名"),
+    max_distance_from_face: float = Query(default=100.0, gt=0, description="切羽からの最大距離"),
+    plot_type: str = Query(default="convergences", description="プロットタイプ: convergences or settlements")
+) -> Dict[str, Any]:
+    """
+    散布図用のデータを生成
+    切羽からの距離 vs 計測経過日数で、変位量または沈下量を色で表現
+    """
+    try:
+        from app.core.dataframe_cache import get_dataframe_cache
+        
+        # キャッシュからデータを取得
+        cache = get_dataframe_cache()
+        cached_data = cache.get_cached_data(folder_name, max_distance_from_face)
+        
+        if not cached_data:
+            raise HTTPException(status_code=404, detail=f"Failed to load data for folder: {folder_name}")
+        
+        df_all = cached_data['df_all']
+        settlements = cached_data['settlements']
+        convergences = cached_data['convergences']
+        
+        # プロットタイプに応じてカラムを選択
+        if plot_type == "convergences":
+            value_columns = convergences
+            label = "変位量"
+        elif plot_type == "settlements":
+            value_columns = settlements
+            label = "沈下量"
+        else:
+            raise HTTPException(status_code=400, detail="plot_type must be 'convergences' or 'settlements'")
+        
+        # 散布図データを生成
+        scatter_points = []
+        
+        # 必要なカラムが存在するかチェック
+        if DISTANCE_FROM_FACE not in df_all.columns or DAYS_FROM_START not in df_all.columns:
+            raise HTTPException(status_code=400, detail="Required columns not found in data")
+        
+        # 各値カラムごとにデータポイントを生成
+        for _, row in df_all.iterrows():
+            distance = row.get(DISTANCE_FROM_FACE)
+            days = row.get(DAYS_FROM_START)
+            
+            # NaN値をスキップ
+            if pd.isna(distance) or pd.isna(days):
+                continue
+            
+            # 各測定値の平均を計算（色として使用）
+            values = []
+            for col in value_columns:
+                if col in row and not pd.isna(row[col]):
+                    values.append(float(row[col]))
+            
+            if values:
+                avg_value = sum(values) / len(values)
+            else:
+                avg_value = 0
+            
+            scatter_points.append({
+                "x": float(distance),
+                "y": float(days),
+                "value": avg_value,
+                "td": float(row.get(TD_NO, 0)) if TD_NO in row else None
+            })
+        
+        # カラーマップの範囲を計算
+        if scatter_points:
+            values = [p["value"] for p in scatter_points]
+            min_value = min(values)
+            max_value = max(values)
+        else:
+            min_value = 0
+            max_value = 1
+        
+        return {
+            "data": scatter_points,
+            "label": label,
+            "x_label": f"{DISTANCE_FROM_FACE} (m)",
+            "y_label": DAYS_FROM_START,
+            "color_range": {
+                "min": min_value,
+                "max": max_value
+            },
+            "plot_type": plot_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_scatter_plot_data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/distance-data", response_model=DistanceDataResponse)
 async def get_distance_data(
     folder_name: str = Query(default="01-hokkaido-akan", description="データフォルダ名"),

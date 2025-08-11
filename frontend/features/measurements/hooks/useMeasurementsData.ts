@@ -6,7 +6,9 @@ import type {
   TimeSeriesDataPoint,
   DistributionDataPoint,
   TunnelScatterPoint,
-  DistanceDataResponse
+  DistanceDataResponse,
+  ScatterPlotDataResponse,
+  ScatterPlotPoint
 } from '@/lib/api/measurements';
 
 export function useMeasurementsData() {
@@ -15,6 +17,8 @@ export function useMeasurementsData() {
   const [displacementDistribution, setDisplacementDistribution] = useState<DistributionDataPoint[]>([]);
   const [settlementDistribution, setSettlementDistribution] = useState<DistributionDataPoint[]>([]);
   const [scatterData, setScatterData] = useState<TunnelScatterPoint[]>([]);
+  const [convergenceScatterData, setConvergenceScatterData] = useState<ScatterPlotPoint[]>([]);
+  const [settlementScatterData, setSettlementScatterData] = useState<ScatterPlotPoint[]>([]);
   const [distanceData, setDistanceData] = useState<DistanceDataResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -182,7 +186,25 @@ export function useMeasurementsData() {
         setDisplacementDistribution(transformedDisplacementDist);
         setSettlementDistribution(transformedSettlementDist);
         
-        // Scatter データは従来のAPIから取得（モックまたは実装済みの場合）
+        // 新しい散布図データを取得
+        try {
+          // 変位量の散布図データ
+          const convergenceScatter = await measurementsAPI.getScatterPlotData('convergences', '01-hokkaido-akan', 100);
+          console.log('Convergence scatter data:', convergenceScatter);
+          console.log('Sample points:', convergenceScatter.data.slice(0, 5));
+          setConvergenceScatterData(convergenceScatter.data);
+          
+          // 沈下量の散布図データ
+          const settlementScatter = await measurementsAPI.getScatterPlotData('settlements', '01-hokkaido-akan', 100);
+          console.log('Settlement scatter data:', settlementScatter);
+          setSettlementScatterData(settlementScatter.data);
+        } catch (err) {
+          console.warn('Scatter plot API error:', err);
+          setConvergenceScatterData([]);
+          setSettlementScatterData([]);
+        }
+        
+        // 従来のScatter データも取得（互換性のため）
         try {
           const scatterRes = await measurementsAPI.getTunnelScatter(800);
           setScatterData(scatterRes.data);
@@ -209,6 +231,8 @@ export function useMeasurementsData() {
     displacementDistribution,
     settlementDistribution,
     scatterData,
+    convergenceScatterData,
+    settlementScatterData,
     distanceData,
     loading,
     error

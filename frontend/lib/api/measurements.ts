@@ -74,6 +74,26 @@ export interface DistanceDataResponse {
   settlements_columns: string[];
   convergences_columns: string[];
   distances: string[];
+  df_all?: any[];  // 全計測データ
+}
+
+export interface ScatterPlotPoint {
+  x: number;  // 切羽からの距離
+  y: number;  // 計測経過日数
+  value: number;  // 変位量または沈下量
+  td?: number;  // TD値
+}
+
+export interface ScatterPlotDataResponse {
+  data: ScatterPlotPoint[];
+  label: string;
+  x_label: string;
+  y_label: string;
+  color_range: {
+    min: number;
+    max: number;
+  };
+  plot_type: 'convergences' | 'settlements';
 }
 
 export class MeasurementsAPI {
@@ -132,6 +152,20 @@ export class MeasurementsAPI {
     );
     if (!response.ok) {
       throw new Error(`Failed to fetch distance data: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async getScatterPlotData(
+    plotType: 'convergences' | 'settlements' = 'convergences',
+    folderName: string = '01-hokkaido-akan',
+    maxDistanceFromFace: number = 100
+  ): Promise<ScatterPlotDataResponse> {
+    const response = await fetch(
+      `${this.baseUrl}/measurements/scatter-plot-data?plot_type=${plotType}&folder_name=${folderName}&max_distance_from_face=${maxDistanceFromFace}`
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch scatter plot data: ${response.statusText}`);
     }
     return response.json();
   }
