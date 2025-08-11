@@ -1,3 +1,4 @@
 // Learning feature hooks
+export { useLearning } from './useLearning';
 export { usePredictionData } from './usePredictionData';
-export { useLearning } from './useLearning'; 
+export { useHeatmap } from './useHeatmap'; 

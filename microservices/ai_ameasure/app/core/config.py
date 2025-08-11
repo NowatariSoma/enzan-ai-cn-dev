@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # CORS設定
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:8000"]
+    BACKEND_CORS_ORIGINS: list[str] = ["*"]  # 開発環境のため全てのオリジンを許可
     
     # ファイルアップロード設定
     MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB

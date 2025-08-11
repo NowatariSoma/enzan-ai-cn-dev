@@ -43,3 +43,17 @@ class DataResponse(BaseModel):
     success: bool
     message: str
     data: Dict[str, Any]
+
+
+class HeatmapRequest(BaseModel):
+    """ヒートマップ生成リクエスト"""
+    folder_name: str
+    x_columns: List[str]
+    y_column: str
+    correlation_method: Optional[str] = "pearson"  # "pearson", "spearman", "kendall"
+
+
+class HeatmapDataRequest(BaseModel):
+    """ヒートマップデータ取得リクエスト"""
+    folder_name: str
+    features: Optional[List[str]] = None

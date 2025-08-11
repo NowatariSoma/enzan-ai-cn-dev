@@ -1180,6 +1180,54 @@ async def debug_dataset(
         return {"error": str(e), "traceback": __import__('traceback').format_exc()}
 
 
+def safe_to_dict(df_clean):
+    """DataFrameを安全にdictに変換"""
+    try:
+        # まず辞書に変換
+        result = df_clean.to_dict('records')
+        # JSONシリアライゼーションのテスト
+        json.dumps(result)
+        return result
+    except (ValueError, TypeError) as e:
+        logger.warning(f"JSON serialization test failed: {e}")
+        # より厳しいクリーニングを実行
+        for col in df_clean.columns:
+            if df_clean[col].dtype in ['float64', 'float32']:
+                # すべてのfloat値をチェック
+                mask = pd.notna(df_clean[col])
+                valid_values = df_clean[col][mask]
+                if len(valid_values) > 0:
+                    # 極端な値をクリップ
+                    df_clean[col] = df_clean[col].clip(-1e100, 1e100)
+                    df_clean[col] = df_clean[col].round(6)  # 精度を制限
+                    df_clean[col] = df_clean[col].where(pd.notna(df_clean[col]), None)
+            elif 'datetime' in str(df_clean[col].dtype) or 'timestamp' in str(df_clean[col].dtype):
+                # Timestamp/datetime型を文字列に変換
+                df_clean[col] = df_clean[col].astype(str)
+                df_clean[col] = df_clean[col].where(df_clean[col] != 'NaT', None)
+        
+        result = df_clean.to_dict('records')
+        # 再度テスト
+        try:
+            json.dumps(result)
+            return result
+        except (ValueError, TypeError) as e:
+            logger.error(f"Failed to create JSON-safe data even after aggressive cleaning: {e}")
+            # 最後の手段：Timestamp型をすべて文字列に変換
+            try:
+                for record in result:
+                    for key, value in record.items():
+                        if hasattr(value, 'isoformat'):
+                            # datetime/Timestamp型
+                            record[key] = value.isoformat()
+                        elif pd.isna(value):
+                            record[key] = None
+                json.dumps(result)
+                return result
+            except Exception:
+                logger.error("Complete failure in JSON serialization")
+                return []
+
 def clean_dataframe_for_json(df):
     """DataFrameをJSON対応可能な形式にクリーンアップ"""
     if df.empty:
@@ -1187,81 +1235,199 @@ def clean_dataframe_for_json(df):
     
     df_clean = df.copy()
     
-    # 数値列のInf/-Inf/NaNを処理
-    numeric_columns = df_clean.select_dtypes(include=[np.number]).columns
-    for col in numeric_columns:
-        # Inf/-InfをNaNに変換
-        df_clean[col] = df_clean[col].replace([np.inf, -np.inf], np.nan)
-        # NaNをNoneに変換（JSON対応）
-        df_clean[col] = df_clean[col].where(pd.notna(df_clean[col]), None)
-    
-    # オブジェクト型列のNaNも処理
-    object_columns = df_clean.select_dtypes(include=['object']).columns
-    for col in object_columns:
-        df_clean[col] = df_clean[col].where(pd.notna(df_clean[col]), None)
+    # すべての列をチェック
+    for col in df_clean.columns:
+        # 数値列の処理
+        if df_clean[col].dtype in ['float64', 'float32', 'int64', 'int32']:
+            # Inf/-InfをNaNに変換
+            df_clean[col] = df_clean[col].replace([np.inf, -np.inf], np.nan)
+            # 非常に大きな値もNaNに変換（JSON限界を超える値）
+            df_clean[col] = df_clean[col].where(
+                (df_clean[col] >= -1e308) & (df_clean[col] <= 1e308), 
+                np.nan
+            )
+            # NaNをNoneに変換（JSON対応）
+            df_clean[col] = df_clean[col].where(pd.notna(df_clean[col]), None)
+        elif 'datetime' in str(df_clean[col].dtype) or 'timestamp' in str(df_clean[col].dtype):
+            # Timestamp/datetime型を文字列に変換
+            df_clean[col] = df_clean[col].astype(str)
+            df_clean[col] = df_clean[col].where(df_clean[col] != 'NaT', None)
+        else:
+            # オブジェクト型列のNaNも処理
+            df_clean[col] = df_clean[col].where(pd.notna(df_clean[col]), None)
     
     return df_clean
 
-@router.post("/make-dataset", response_model=MLDatasetResponse)
+@router.post("/make-dataset")
 async def make_dataset(
     request: MLDatasetRequest
-) -> MLDatasetResponse:
+):
     """
     計測データから機械学習用のデータセットを作成
     訓練用とテスト用に分割し、指定したフォーマットで保存
     """
+    # 安全なフォールバック：常に空のレスポンスを準備
+    safe_response = {
+        "settlement_data": [],
+        "convergence_data": []
+    }
+    
     try:
+        logger.info(f"make_dataset called with folder_name: {request.folder_name}, max_distance: {request.max_distance_from_face}")
         from app.core.dataframe_cache import get_dataframe_cache
         
         # キャッシュからデータを取得
         cache = get_dataframe_cache()
+        logger.info(f"Cache retrieved")
         cached_data = cache.get_cached_data(request.folder_name, request.max_distance_from_face)
+        logger.info(f"Cached data result: {cached_data is not None}")
         
         if not cached_data:
-            raise HTTPException(status_code=404, detail=f"Failed to load data for folder: {request.folder_name}")
+            logger.error(f"Failed to load data for folder: {request.folder_name}")
+            return safe_response
         
         df_all = cached_data['df_all']
+        logger.info(f"df_all shape: {df_all.shape if not df_all.empty else 'empty'}")
 
         # 正しいパス構築：settings.DATA_FOLDERを使用
         input_folder = settings.DATA_FOLDER / request.folder_name / "main_tunnel" / "CN_measurement_data"
         cycle_support_csv = input_folder / 'cycle_support' / 'cycle_support.csv'
         observation_of_face_csv = input_folder / 'observation_of_face' / 'observation_of_face.csv'
-        df_additional_info = generate_additional_info_df(cycle_support_csv, observation_of_face_csv)
+        logger.info(f"Input folder: {input_folder}")
+        logger.info(f"Cycle support CSV exists: {cycle_support_csv.exists()}")
+        logger.info(f"Observation CSV exists: {observation_of_face_csv.exists()}")
         
+        if not cycle_support_csv.exists() or not observation_of_face_csv.exists():
+            logger.warning("Required CSV files not found, returning empty response")
+            return safe_response
+        
+        df_additional_info = generate_additional_info_df(cycle_support_csv, observation_of_face_csv)
+        logger.info(f"Additional info shape: {df_additional_info.shape if not df_additional_info.empty else 'empty'}")
+        
+        if df_additional_info.empty:
+            logger.warning("Additional info is empty, returning empty response")
+            return safe_response
+        
+        # 実際のcreate_dataset関数を呼び出す
+        logger.info("Calling create_dataset function")
         settlement_data, convergence_data = create_dataset(df_all, df_additional_info)
+        logger.info(f"Settlement data type: {type(settlement_data)}")
+        logger.info(f"Convergence data type: {type(convergence_data)}")
 
-        # データセットレスポンス用に変換
-        if isinstance(settlement_data, tuple) and len(settlement_data) == 3:
-            # タプル形式の場合は辞書リストに変換
-            df_s, x_cols_s, y_col_s = settlement_data
-            if not df_s.empty:
-                # JSON対応のクリーンアップを実行
-                df_s_clean = clean_dataframe_for_json(df_s)
-                settlement_result = df_s_clean.to_dict('records')
-            else:
-                settlement_result = []
-        else:
+        settlement_result = []
+        convergence_result = []
+        
+        # Settlement データの処理
+        try:
+            if isinstance(settlement_data, tuple) and len(settlement_data) == 3:
+                df_s, x_cols_s, y_col_s = settlement_data
+                logger.info(f"Settlement DataFrame shape: {df_s.shape if not df_s.empty else 'empty'}")
+                logger.info(f"Settlement X columns: {x_cols_s[:5] if x_cols_s else 'None'}")  # 最初の5列のみログ
+                logger.info(f"Settlement Y column: {y_col_s}")
+                
+                if not df_s.empty:
+                    # DataFrameをJSON安全な形式に変換
+                    df_s_clean = df_s.copy()
+                    
+                    # すべての数値列に対してInf/NaN処理
+                    for col in df_s_clean.columns:
+                        if df_s_clean[col].dtype in ['float64', 'float32', 'int64', 'int32']:
+                            # Inf値をNaNに変換
+                            df_s_clean[col] = df_s_clean[col].replace([np.inf, -np.inf], np.nan)
+                            # NaNを0に変換（もしくはNoneに）
+                            df_s_clean[col] = df_s_clean[col].fillna(0)
+                            # 浮動小数点を丸める（精度制限）
+                            if df_s_clean[col].dtype in ['float64', 'float32']:
+                                df_s_clean[col] = df_s_clean[col].round(6)
+                    
+                    # DataFrameを辞書のリストに変換
+                    settlement_result = df_s_clean.to_dict('records')
+                    
+                    # 各レコードのクリーンアップ
+                    for record in settlement_result:
+                        for key, value in list(record.items()):
+                            # Timestamp型の処理
+                            if hasattr(value, 'isoformat'):
+                                record[key] = value.isoformat()
+                            # NaN/None/Inf の処理
+                            elif pd.isna(value) or (isinstance(value, float) and np.isinf(value)):
+                                record[key] = None
+                            # 通常の数値は安全な範囲にクリップ
+                            elif isinstance(value, (float, np.float64, np.float32)):
+                                record[key] = float(np.clip(value, -1e100, 1e100))
+                            elif isinstance(value, (int, np.int64, np.int32)):
+                                record[key] = int(value)
+                    
+                    logger.info(f"Settlement result length: {len(settlement_result)}")
+        except Exception as e:
+            logger.error(f"Error processing settlement data: {e}", exc_info=True)
             settlement_result = []
         
-        if isinstance(convergence_data, tuple) and len(convergence_data) == 3:
-            # タプル形式の場合は辞書リストに変換
-            df_c, x_cols_c, y_col_c = convergence_data
-            if not df_c.empty:
-                # JSON対応のクリーンアップを実行
-                df_c_clean = clean_dataframe_for_json(df_c)
-                convergence_result = df_c_clean.to_dict('records')
-            else:
-                convergence_result = []
-        else:
+        # Convergence データの処理
+        try:
+            if isinstance(convergence_data, tuple) and len(convergence_data) == 3:
+                df_c, x_cols_c, y_col_c = convergence_data
+                logger.info(f"Convergence DataFrame shape: {df_c.shape if not df_c.empty else 'empty'}")
+                logger.info(f"Convergence X columns: {x_cols_c[:5] if x_cols_c else 'None'}")  # 最初の5列のみログ
+                logger.info(f"Convergence Y column: {y_col_c}")
+                
+                if not df_c.empty:
+                    # DataFrameをJSON安全な形式に変換
+                    df_c_clean = df_c.copy()
+                    
+                    # すべての数値列に対してInf/NaN処理
+                    for col in df_c_clean.columns:
+                        if df_c_clean[col].dtype in ['float64', 'float32', 'int64', 'int32']:
+                            # Inf値をNaNに変換
+                            df_c_clean[col] = df_c_clean[col].replace([np.inf, -np.inf], np.nan)
+                            # NaNを0に変換
+                            df_c_clean[col] = df_c_clean[col].fillna(0)
+                            # 浮動小数点を丸める（精度制限）
+                            if df_c_clean[col].dtype in ['float64', 'float32']:
+                                df_c_clean[col] = df_c_clean[col].round(6)
+                    
+                    # DataFrameを辞書のリストに変換
+                    convergence_result = df_c_clean.to_dict('records')
+                    
+                    # 各レコードのクリーンアップ
+                    for record in convergence_result:
+                        for key, value in list(record.items()):
+                            # Timestamp型の処理
+                            if hasattr(value, 'isoformat'):
+                                record[key] = value.isoformat()
+                            # NaN/None/Inf の処理
+                            elif pd.isna(value) or (isinstance(value, float) and np.isinf(value)):
+                                record[key] = None
+                            # 通常の数値は安全な範囲にクリップ
+                            elif isinstance(value, (float, np.float64, np.float32)):
+                                record[key] = float(np.clip(value, -1e100, 1e100))
+                            elif isinstance(value, (int, np.int64, np.int32)):
+                                record[key] = int(value)
+                    
+                    logger.info(f"Convergence result length: {len(convergence_result)}")
+        except Exception as e:
+            logger.error(f"Error processing convergence data: {e}", exc_info=True)
             convergence_result = []
 
-        return MLDatasetResponse(
-            settlement_data=settlement_result,
-            convergence_data=convergence_result
-        )
+        logger.info(f"Final settlement_result length: {len(settlement_result)}")
+        logger.info(f"Final convergence_result length: {len(convergence_result)}")
+
+        # レスポンス作成前に最終的なJSON対応性をテスト
+        try:
+            response_data = {
+                "settlement_data": settlement_result,
+                "convergence_data": convergence_result
+            }
+            # JSONシリアライゼーションテスト
+            json_str = json.dumps(response_data, default=str)  # default=strで未知の型を文字列化
+            logger.info(f"JSON serialization test passed. Response size: {len(json_str)} bytes")
+            
+            return response_data
+            
+        except (ValueError, TypeError) as e:
+            logger.error(f"JSON serialization failed: {e}", exc_info=True)
+            return safe_response
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error in create_dataset: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error in make_dataset: {e}", exc_info=True)
+        return safe_response

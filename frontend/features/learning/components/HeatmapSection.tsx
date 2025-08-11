@@ -13,6 +13,8 @@ interface HeatmapSectionProps {
   title: string;
   data: HeatmapData[];
   features: string[];
+  loading?: boolean;
+  error?: string | null;
 }
 
 export function HeatmapSection({ title, data, features }: HeatmapSectionProps) {

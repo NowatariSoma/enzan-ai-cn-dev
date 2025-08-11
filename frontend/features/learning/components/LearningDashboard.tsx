@@ -15,7 +15,7 @@ import { ScatterPlotSection } from "./ScatterPlotSection";
 import { FeatureImportanceSection } from "./FeatureImportanceSection";
 import { HeatmapSection } from "./HeatmapSection";
 import { PredictionDataTable } from "./PredictionDataTable";
-import { usePredictionData, useLearning } from "../hooks";
+import { usePredictionData, useLearning, useHeatmap } from "../hooks";
 import { Calculator, TrendingUp, Activity } from "lucide-react";
 
 export function LearningDashboard() {
@@ -43,6 +43,8 @@ export function LearningDashboard() {
     validationRSquaredB,
     handleAnalyze,
   } = useLearning();
+
+  const { loading: heatmapLoading, error: heatmapError } = useHeatmap();
 
   const { predictionData } = usePredictionData(maxDistance, predictionTD);
 
@@ -248,12 +250,16 @@ export function LearningDashboard() {
             title="Heatmap"
             data={heatmapDataA.data}
             features={heatmapDataA.features}
+            loading={heatmapLoading}
+            error={heatmapError}
           />
           
           <HeatmapSection
             title="Heatmap"
             data={heatmapDataB.data}
             features={heatmapDataB.features}
+            loading={heatmapLoading}
+            error={heatmapError}
           />
         </div>
       </div>
