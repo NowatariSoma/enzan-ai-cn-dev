@@ -47,14 +47,14 @@ DISTANCES_FROM_FACE = csv_loader.DISTANCES_FROM_FACE
 def safe_float(value):
     """安全にfloatに変換し、NaN/Infの場合はNoneを返す"""
     try:
-    if pd.isna(value) or np.isinf(value):
-        return None
-    return float(value)
+        if pd.isna(value) or np.isinf(value):
+            return None
+        return float(value)
     except (TypeError, ValueError):
         return None
 
 def convert_support_pattern_to_numeric(value):
-    """支保パターンを数値に変換"""
+    """支保パターンを数値に変換（Streamlitアプリと同じ実装）"""
     if isinstance(value, str):
         value = value.lower().translate(str.maketrans({
             'ａ': 'a', 'ｂ': 'b', 'ｃ': 'c', 'ｄ': 'd', 'ｅ': 'e', 'ｆ': 'f', 'ｇ': 'g', 'ｈ': 'h', 'ｉ': 'i', 'ｊ': 'j',
@@ -83,15 +83,28 @@ def get_real_time_series_data(
     実際のCSVファイルから時系列データを取得
     """
     try:
-        # 実際の計測データを読み込み
-        df = csv_loader.load_all_measurement_data(settings.DATA_FOLDER, folder_name)
+        # 実際の計測データを読み込み - 正しいメソッドを使用
+        input_folder = settings.DATA_FOLDER / folder_name / "main_tunnel" / "CN_measurement_data"
+        measurements_path = input_folder / "measurements_A"
         
-        if df.empty:
+        if not measurements_path.exists():
+            logger.warning(f"Measurements folder not found: {measurements_path}")
+            return []
+            
+        measurement_a_csvs = list(measurements_path.glob("*.csv"))
+        if not measurement_a_csvs:
+            logger.warning(f"No measurement CSV files found in {measurements_path}")
+            return []
+        
+        # generate_dataframesメソッドを使用してデータフレームを取得
+        df_all, _, _, _, _, _ = csv_loader.generate_dataframes(measurement_a_csvs, 100.0)
+        
+        if df_all.empty:
             logger.warning(f"No measurement data found for {folder_name}")
             return []
         
         # 時系列データを抽出
-        raw_data = csv_loader.extract_time_series_data(df, data_type, num_points)
+        raw_data = csv_loader.extract_time_series_data(df_all, data_type, num_points)
         
         # Pydanticモデルに変換
         data = []
@@ -191,87 +204,145 @@ def generate_additional_info_df(cycle_support_csv, observation_of_face_csv):
 
 
 def create_dataset(df, df_additional_info):
-    """displacement_temporal_spacial_analysis.pyと同じ実装（修正版）"""
+    """displacement_temporal_spacial_analysis.pyと完全に同じ実装"""
+    # 定数の取得: まずCSVローダーの定数を使用し、必要に応じてStreamlitアプリの定数も使用
     try:
-        logger.info(f"create_dataset called with df shape: {df.shape}, additional_info shape: {df_additional_info.shape}")
+        # Streamlitアプリの定数を直接使用せず、既にインポート済みの定数を使用
+        # ファイル上部でimportされている定数を使用
+        pass
+    except ImportError:
+        logger.warning("定数の取得でエラーが発生しました")
+    
+    # CSVローダーから取得した定数を使用（すでにファイル上部でimport済み）
+    common_columns = [csv_loader.DATE, csv_loader.CYCLE_NO, csv_loader.TD_NO, csv_loader.STA, 
+                     csv_loader.SECTION_TD, csv_loader.FACE_TD, csv_loader.DISTANCE_FROM_FACE, csv_loader.DAYS_FROM_START]
+    
+    # 追加情報の列定義（Streamlitアプリと同じ）
+    additional_info_common_columns = ['支保寸法', '吹付厚', 'ﾛｯｸﾎﾞﾙﾄ数', 'ﾛｯｸﾎﾞﾙﾄ長', '覆工厚', '土被り高さ', '岩石グループ', '岩石名コード', '加重平均評価点']
+    additional_info_common_support_columns = ['支保工種', '支保パターン2']
+    additional_info_common_bit_columns = ['補助工法の緒元', '増し支保工の緒元', '計測条件・状態等', 'インバートの早期障害']
+    additional_info_left_columns = ['左肩・圧縮強度', '左肩・風化変質', '左肩・割目間隔', '左肩・割目状態', '左肩割目の方向・平行', '左肩・湧水量', '左肩・劣化', '左肩・評価点']
+    additional_info_crown_columns = ['天端・圧縮強度', '天端・風化変質', '天端・割目間隔', '天端・割目状態', '天端割目の方向・平行', '天端・湧水量', '天端・劣化', '天端・評価点']
+    additional_info_right_columns = ['右肩・圧縮強度', '右肩・風化変質', '右肩・割目間隔', '右肩・割目状態', '右肩割目の方向・平行', '右肩・湧水量', '右肩・劣化', '右肩・評価点']
+    additional_info_columns = ['圧縮強度', '風化変質', '割目間隔', '割目状態', '割目の方向・平行', '湧水量', '劣化', '評価点']
+    
+    def decompose_columns(df, df_additional_info, targets, diff_targets):
+        """Streamlitアプリと同じdecompose_columns関数の実装"""
+        df_decomposed = pd.DataFrame()
         
-        # 利用可能な列のみでシンプルなデータセットを作成
-        available_settlements = [col for col in SETTLEMENTS if col in df.columns]
-        available_convergences = [col for col in CONVERGENCES if col in df.columns]
-        available_diff_settlements = [col for col in DIFFERENCE_FROM_FINAL_SETTLEMENTS if col in df.columns]
-        available_diff_convergences = [col for col in DIFFERENCE_FROM_FINAL_CONVERGENCES if col in df.columns]
+        # Merge df and df_additional_info_filtered by CYCLE_NO and 'ｻｲｸﾙ'
+        for i, row in df.iterrows():
+            # df_additional_infoに'ｻｲｸﾙ'列があるかチェック
+            if 'ｻｲｸﾙ' in df_additional_info.columns and csv_loader.CYCLE_NO in row:
+                try:
+                    matching_index = df_additional_info.index[df_additional_info['ｻｲｸﾙ'] <= row[csv_loader.CYCLE_NO]].max()
+                    if pd.notna(matching_index):
+                        df_additional_info_filtered = df_additional_info[df_additional_info.index == matching_index]
+                        filtered_columns = additional_info_common_columns + \
+                            additional_info_left_columns + \
+                            additional_info_crown_columns + \
+                            additional_info_right_columns + \
+                            additional_info_common_bit_columns + \
+                            additional_info_common_support_columns
+                        
+                        # 実際に存在する列のみを使用
+                        filtered_columns = [col for col in filtered_columns if col in df_additional_info_filtered.columns]
+                        
+                        if filtered_columns:
+                            df_additional_info_filtered = df_additional_info_filtered[filtered_columns]
+                            df.loc[i, df_additional_info_filtered.columns] = df_additional_info_filtered.values.squeeze()
+                except Exception as e:
+                    logger.warning(f"追加情報の結合でエラー: {e}")
+                    continue
         
-        logger.info(f"Available settlements: {available_settlements}")
-        logger.info(f"Available convergences: {available_convergences}")
+        # Position別のデータ分解（左肩、天端、右肩）
+        for i, (a, b) in enumerate(zip(targets[:3],  # 3 at the moment
+                                    [additional_info_left_columns, additional_info_crown_columns, additional_info_right_columns])):
+            if a not in df.columns or diff_targets[i] not in df.columns:
+                continue
+                
+            filtered_columns = common_columns + [a] + additional_info_common_columns + additional_info_common_bit_columns + additional_info_common_support_columns + b + [diff_targets[i]]
+            
+            # 実際に存在する列のみを選択
+            filtered_columns = [col for col in filtered_columns if col in df.columns]
+            
+            if len(filtered_columns) > 0:
+                _df = df[filtered_columns].copy()
+                
+                # 列名の変更
+                if a in _df.columns:
+                    _df.rename(columns={a: a[:-1]}, inplace=True)
+                if diff_targets[i] in _df.columns:
+                    _df.rename(columns={diff_targets[i]: diff_targets[0][:-1]}, inplace=True)
+                
+                # additional_info_columnsへの列名変更
+                for src, tgt in zip(b, additional_info_columns):
+                    if src in _df.columns:
+                        _df.rename(columns={src: tgt}, inplace=True)
+                
+                _df['position_id'] = i
+                df_decomposed = pd.concat([df_decomposed, _df], axis=0, ignore_index=True)
         
-        # 基本特徴量
-        base_features = [TD_NO, DISTANCE_FROM_FACE, DAYS_FROM_START]
-        available_base_features = [col for col in base_features if col in df.columns]
+        if df_decomposed.empty:
+            logger.warning("decompose_columnsで空のDataFrameが生成されました")
+            return pd.DataFrame(), [], ""
         
+        # ビット列の処理
+        bit_columns_in_df = [col for col in additional_info_common_bit_columns if col in df_decomposed.columns]
+        for c in bit_columns_in_df:
+            df_decomposed[f"{c}_bit"] = (~df_decomposed[c].isna()).astype(int)
+        
+        # サポートパターンの数値変換
+        support_columns_in_df = [col for col in additional_info_common_support_columns if col in df_decomposed.columns]
+        for c in support_columns_in_df:
+            df_decomposed[f"{c}_numeric"] = df_decomposed[c].apply(convert_support_pattern_to_numeric)
+        
+        # X列とY列の設定
+        exclude_columns = [csv_loader.DATE, csv_loader.CYCLE_NO, csv_loader.TD_NO, csv_loader.STA, 
+                          csv_loader.SECTION_TD, csv_loader.FACE_TD] + bit_columns_in_df + support_columns_in_df
+        if len(diff_targets) > 0:
+            y_column = diff_targets[0][:-1]
+            exclude_columns.append(y_column)
+        else:
+            y_column = ""
+        
+        x_columns = [col for col in df_decomposed.columns if col not in exclude_columns and col != 'position_id']
+        
+        # JSON対応：Inf値をNaNに変換してから削除
+        numeric_columns = df_decomposed.select_dtypes(include=[np.number]).columns
+        for col in numeric_columns:
+            df_decomposed[col] = df_decomposed[col].replace([np.inf, -np.inf], np.nan)
+        
+        # NaN値の除去（より緩い条件）
+        # Y列（ターゲット列）のNaNのみを除去し、X列のNaNは許容
+        if y_column and y_column in df_decomposed.columns:
+            df_decomposed = df_decomposed.dropna(subset=[y_column])
+        
+        # 重要なX列のみでNaN除去（全てのX列でNaNがある行のみ除去）
+        if x_columns:
+            # 全てのX列がNaNの行のみを除去
+            essential_x_cols = [col for col in x_columns if col in df_decomposed.columns][:5]  # 重要な最初の5列のみ
+            if essential_x_cols:
+                df_decomposed = df_decomposed.dropna(subset=essential_x_cols, how='all')
+        
+        return df_decomposed, x_columns, y_column
+    
+    try:
         # 沈下量データセット作成
-        settlement_data = []
-        if available_settlements and available_base_features:
-            # 最初の3つの沈下量列を使用
-            target_settlements = available_settlements[:3]
-            
-            # 特徴量とターゲット列を結合
-            dataset_columns = available_base_features + target_settlements
-            if available_diff_settlements:
-                dataset_columns += available_diff_settlements[:3]  # 対応する差分列
-            
-            df_settlement = df[dataset_columns].dropna()
-            if not df_settlement.empty:
-                # position_idを追加（左肩=0, 天端=1, 右肩=2の3回複製）
-                settlement_records = []
-                for pos_id in range(min(3, len(target_settlements))):
-                    temp_df = df_settlement[available_base_features + [target_settlements[pos_id]]].copy()
-                    if available_diff_settlements and pos_id < len(available_diff_settlements):
-                        temp_df[available_diff_settlements[pos_id]] = df_settlement[available_diff_settlements[pos_id]]
-                    temp_df['position_id'] = pos_id
-                    # 列名を統一（最初の沈下量列の名前に統一）
-                    target_col_name = target_settlements[0][:-1] if target_settlements[0].endswith('1') else target_settlements[0]
-                    temp_df.rename(columns={target_settlements[pos_id]: target_col_name}, inplace=True)
-                    settlement_records.extend(temp_df.to_dict('records'))
-                
-                settlement_data = settlement_records
-        
+        settlement = decompose_columns(df, df_additional_info, csv_loader.SETTLEMENTS, csv_loader.DIFFERENCE_FROM_FINAL_SETTLEMENTS)
         # 変位量データセット作成
-        convergence_data = []
-        if available_convergences and available_base_features:
-            # 最初の3つの変位量列を使用
-            target_convergences = available_convergences[:3]
-            
-            # 特徴量とターゲット列を結合
-            dataset_columns = available_base_features + target_convergences
-            if available_diff_convergences:
-                dataset_columns += available_diff_convergences[:3]  # 対応する差分列
-            
-            df_convergence = df[dataset_columns].dropna()
-            if not df_convergence.empty:
-                # position_idを追加（A=0, B=1, C=2の3回複製）
-                convergence_records = []
-                for pos_id in range(min(3, len(target_convergences))):
-                    temp_df = df_convergence[available_base_features + [target_convergences[pos_id]]].copy()
-                    if available_diff_convergences and pos_id < len(available_diff_convergences):
-                        temp_df[available_diff_convergences[pos_id]] = df_convergence[available_diff_convergences[pos_id]]
-                    temp_df['position_id'] = pos_id
-                    # 列名を統一（最初の変位量列の名前に統一）
-                    target_col_name = target_convergences[0][:-1] if target_convergences[0].endswith('A') else target_convergences[0]
-                    temp_df.rename(columns={target_convergences[pos_id]: target_col_name}, inplace=True)
-                    convergence_records.extend(temp_df.to_dict('records'))
-                
-                convergence_data = convergence_records
-
-        logger.info(f"Settlement data records: {len(settlement_data)}")
-        logger.info(f"Convergence data records: {len(convergence_data)}")
+        convergence = decompose_columns(df, df_additional_info, csv_loader.CONVERGENCES, csv_loader.DIFFERENCE_FROM_FINAL_CONVERGENCES)
         
-        return settlement_data, convergence_data
+        logger.info(f"Settlement data: {type(settlement)}")
+        logger.info(f"Convergence data: {type(convergence)}")
+        
+        return settlement, convergence
         
     except Exception as e:
         logger.error(f"Error in create_dataset: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return [], []
+        return (pd.DataFrame(), [], ""), (pd.DataFrame(), [], "")
 
 @router.get("/displacement-series", response_model=schemas.DisplacementSeriesResponse)
 async def get_displacement_series(
@@ -1109,6 +1180,28 @@ async def debug_dataset(
         return {"error": str(e), "traceback": __import__('traceback').format_exc()}
 
 
+def clean_dataframe_for_json(df):
+    """DataFrameをJSON対応可能な形式にクリーンアップ"""
+    if df.empty:
+        return df
+    
+    df_clean = df.copy()
+    
+    # 数値列のInf/-Inf/NaNを処理
+    numeric_columns = df_clean.select_dtypes(include=[np.number]).columns
+    for col in numeric_columns:
+        # Inf/-InfをNaNに変換
+        df_clean[col] = df_clean[col].replace([np.inf, -np.inf], np.nan)
+        # NaNをNoneに変換（JSON対応）
+        df_clean[col] = df_clean[col].where(pd.notna(df_clean[col]), None)
+    
+    # オブジェクト型列のNaNも処理
+    object_columns = df_clean.select_dtypes(include=['object']).columns
+    for col in object_columns:
+        df_clean[col] = df_clean[col].where(pd.notna(df_clean[col]), None)
+    
+    return df_clean
+
 @router.post("/make-dataset", response_model=MLDatasetResponse)
 async def make_dataset(
     request: MLDatasetRequest
@@ -1137,9 +1230,30 @@ async def make_dataset(
         
         settlement_data, convergence_data = create_dataset(df_all, df_additional_info)
 
-        # データセットレスポンス用に変換（すでに辞書形式なのでそのまま使用）
-        settlement_result = settlement_data if isinstance(settlement_data, list) else []
-        convergence_result = convergence_data if isinstance(convergence_data, list) else []
+        # データセットレスポンス用に変換
+        if isinstance(settlement_data, tuple) and len(settlement_data) == 3:
+            # タプル形式の場合は辞書リストに変換
+            df_s, x_cols_s, y_col_s = settlement_data
+            if not df_s.empty:
+                # JSON対応のクリーンアップを実行
+                df_s_clean = clean_dataframe_for_json(df_s)
+                settlement_result = df_s_clean.to_dict('records')
+            else:
+                settlement_result = []
+        else:
+            settlement_result = []
+        
+        if isinstance(convergence_data, tuple) and len(convergence_data) == 3:
+            # タプル形式の場合は辞書リストに変換
+            df_c, x_cols_c, y_col_c = convergence_data
+            if not df_c.empty:
+                # JSON対応のクリーンアップを実行
+                df_c_clean = clean_dataframe_for_json(df_c)
+                convergence_result = df_c_clean.to_dict('records')
+            else:
+                convergence_result = []
+        else:
+            convergence_result = []
 
         return MLDatasetResponse(
             settlement_data=settlement_result,

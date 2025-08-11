@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 import base64
 from io import BytesIO
 from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegressor
@@ -12,8 +13,19 @@ from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import mean_squared_error, r2_score
+import logging
+
+# 日本語フォント設定
+try:
+    import japanize_matplotlib
+except ImportError:
+    # japanize_matplotlibがない場合の代替設定
+    plt.rcParams['font.family'] = ['DejaVu Sans', 'Liberation Sans', 'sans-serif']
+    plt.rcParams['axes.unicode_minus'] = False
 
 from app import schemas
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -167,6 +179,87 @@ def draw_feature_importance(model, x_columns: List[str]) -> str:
     return image_base64
 
 
+async def get_dataset_from_make_dataset(folder_name: str, max_distance_from_face: float) -> Tuple[Tuple, Tuple]:
+    """
+    create_dataset関数を直接呼び出してタプル形式でデータセットを取得
+    戻り値: (settlement_tuple, convergence_tuple)
+    各tuple = (df, x_columns, y_column)
+    """
+    from app.core.dataframe_cache import get_dataframe_cache
+    from app.api.endpoints.measurements import create_dataset, generate_additional_info_df
+    from app.core.config import settings
+    
+    # キャッシュからデータを取得
+    cache = get_dataframe_cache()
+    cached_data = cache.get_cached_data(folder_name, max_distance_from_face)
+    
+    if not cached_data:
+        raise HTTPException(status_code=404, detail=f"Failed to load data for folder: {folder_name}")
+    
+    df_all = cached_data['df_all']
+
+    # 追加情報ファイルの読み込み
+    input_folder = settings.DATA_FOLDER / folder_name / "main_tunnel" / "CN_measurement_data"
+    cycle_support_csv = input_folder / 'cycle_support' / 'cycle_support.csv'
+    observation_of_face_csv = input_folder / 'observation_of_face' / 'observation_of_face.csv'
+    df_additional_info = generate_additional_info_df(cycle_support_csv, observation_of_face_csv)
+    
+    # create_dataset関数を直接呼び出し
+    settlement_data, convergence_data = create_dataset(df_all, df_additional_info)
+    
+    return settlement_data, convergence_data
+
+
+def split_data_by_td(df: pd.DataFrame, td: float = None, y_column: str = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    TD値でデータを訓練用と検証用に分割
+    
+    Args:
+        df: データフレーム
+        td: 分割用のTD値。Noneの場合は自動設定
+        y_column: ターゲット列名。指定された場合はその列のNaN値を除く
+    
+    Returns:
+        Tuple[訓練用データ, 検証用データ]
+    """
+    # ターゲット列が指定されている場合はその列のNaN値を除く
+    if y_column and y_column in df.columns:
+        df_clean = df.dropna(subset=[y_column])
+        logger.info(f"Removed NaN values in target column {y_column}: {len(df)} -> {len(df_clean)} rows")
+    else:
+        # 基本的なNaN処理のみ
+        df_clean = df.dropna(subset=[col for col in df.columns if '沈下' in col or '変位' in col])
+    
+    if len(df_clean) < 10:
+        # NaN処理後のデータが少ない場合は元のデータを使用
+        logger.warning("Insufficient data after NaN removal, using original data")
+        df_clean = df
+    
+    # TDカラムを探す
+    td_columns = [col for col in df_clean.columns if 'TD' in col.upper()]
+    if not td_columns:
+        # TD列がない場合は8:2で分割
+        split_idx = int(len(df_clean) * 0.8)
+        return df_clean.iloc[:split_idx], df_clean.iloc[split_idx:]
+    
+    td_col = td_columns[0]
+    
+    if td is None:
+        # TD値の80%パーセンタイルを使用
+        td = df_clean[td_col].quantile(0.8)
+    
+    df_train = df_clean[df_clean[td_col] < td]
+    df_validate = df_clean[df_clean[td_col] >= td]
+    
+    # 訓練データが少なすぎる場合の対策
+    if len(df_train) < len(df_clean) * 0.1:
+        split_idx = int(len(df_clean) * 0.8)
+        df_train = df_clean.iloc[:split_idx]
+        df_validate = df_clean.iloc[split_idx:]
+    
+    return df_train, df_validate
+
+
 @router.post("/train", response_model=schemas.ModelTrainResponse)
 async def train_model(
     request: schemas.ModelTrainRequest
@@ -279,3 +372,188 @@ async def get_model_types() -> List[str]:
     利用可能なモデルタイプ一覧を取得
     """
     return list(set(info["type"] for info in MOCK_MODELS.values()))
+
+
+@router.post("/process-each", response_model=schemas.ProcessEachResponse)
+async def process_each(
+    request: schemas.ProcessEachRequest
+) -> schemas.ProcessEachResponse:
+    """
+    元のdisplacement_temporal_spacial_analysis.pyのprocess_each関数を完全に忠実に実装
+    """
+    try:
+        logger.info(f"Processing {request.data_type} data with model {request.model_name}")
+        
+        # モデルが存在するかチェック
+        if request.model_name not in MOCK_MODELS:
+            raise HTTPException(status_code=404, detail=f"Model {request.model_name} not found")
+        
+        model_info = MOCK_MODELS[request.model_name]
+        model = type(model_info["model"])(**model_info["model"].get_params())
+        
+        # データセットを取得
+        settlement_data, convergence_data = await get_dataset_from_make_dataset(
+            request.folder_name, request.max_distance_from_face
+        )
+        
+        # データタイプに応じてデータを選択
+        if request.data_type.lower() == "settlement":
+            if not settlement_data or not isinstance(settlement_data, tuple):
+                raise HTTPException(status_code=404, detail="No settlement data found")
+            df, x_columns, y_column = settlement_data
+        elif request.data_type.lower() == "convergence":
+            if not convergence_data or not isinstance(convergence_data, tuple):
+                raise HTTPException(status_code=404, detail="No convergence data found")
+            df, x_columns, y_column = convergence_data
+        else:
+            raise HTTPException(status_code=400, detail="data_type must be 'settlement' or 'convergence'")
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail=f"No {request.data_type} data available")
+        
+        logger.info(f"Dataset loaded: {len(df)} rows")
+        logger.info(f"Original x_columns: {x_columns}")
+        logger.info(f"Original y_column: {y_column}")
+        
+        # 元のコードの行388-396に忠実に実装
+        if request.predict_final:
+            # 行389-391: 最終変位量、沈下量モデル
+            # process_each(model, df, x_columns, y_column, td)
+            # y_columnそのまま使用（差分列）
+            pass
+        else:
+            # 行393-396: 変位量、沈下量モデル  
+            # y_column = x_columns[2]
+            # x_columns = [x for x in x_columns if x != y_column]
+            # process_each(model, df, x_columns, y_column, td)
+            y_column = x_columns[2]
+            x_columns = [x for x in x_columns if x != y_column]
+        
+        logger.info(f"Final x_columns: {x_columns}")
+        logger.info(f"Final y_column: {y_column}")
+        
+        # 元のコード行334-337: TD値によるデータ分割
+        # if td is None:
+        #     td = df[SECTION_TD].max()
+        # train_date = df[df[SECTION_TD] < td][DATE].max()
+        # df_train = df[df[DATE] <= train_date]
+        # df_validate = df[df[SECTION_TD] >= td]
+        
+        # SECTION_TD列とDATE列を探す
+        section_td_col = None
+        date_col = None
+        
+        for col in df.columns:
+            if 'SECTION' in col.upper() and 'TD' in col.upper():
+                section_td_col = col
+            elif 'DATE' in col.upper() or '日付' in col:
+                date_col = col
+        
+        # 元のコードに完全に忠実な分割
+        skip_nan_removal = False
+        if section_td_col and date_col:
+            # 元のコードそのまま
+            td = request.td if request.td is not None else df[section_td_col].max()
+            train_date = df[df[section_td_col] < td][date_col].max()
+            df_train = df[df[date_col] <= train_date]
+            df_validate = df[df[section_td_col] >= td]
+            
+            logger.info(f"Using original split logic: td={td}, train_date={train_date}")
+            logger.info(f"Train shape: {df_train.shape}, Validate shape: {df_validate.shape}")
+        else:
+            # SECTION_TD, DATEが存在しない場合は簡易分割
+            logger.warning(f"SECTION_TD or DATE columns not found. Using 8:2 split instead.")
+            logger.info(f"Available columns: {df.columns.tolist()}")
+            
+            # 利用可能な列のみを使用
+            available_x_columns = [col for col in x_columns if col in df.columns]
+            if y_column not in df.columns:
+                raise HTTPException(status_code=400, detail=f"Target column {y_column} not found in data")
+            
+            # NaN値を含む行を最初に除去してから分割
+            required_cols = available_x_columns + [y_column]
+            df_clean = df.dropna(subset=required_cols)
+            
+            if len(df_clean) < 10:
+                raise HTTPException(status_code=400, detail="Insufficient clean data for training")
+            
+            train_idx = int(len(df_clean) * 0.8)
+            df_train = df_clean.iloc[:train_idx].copy()
+            df_validate = df_clean.iloc[train_idx:].copy()
+            
+            logger.info(f"Clean data split: Total={len(df_clean)}, Train={len(df_train)}, Validate={len(df_validate)}")
+            
+            # NaN除去は既に実施済みなのでスキップ
+            skip_nan_removal = True
+        
+        if not skip_nan_removal:
+            # 利用可能な列のみを使用
+            available_x_columns = [col for col in x_columns if col in df.columns]
+            if y_column not in df.columns:
+                raise HTTPException(status_code=400, detail=f"Target column {y_column} not found in data")
+            
+            # NaN値を含む行を除去
+            required_cols = available_x_columns + [y_column]
+            df_train = df_train.dropna(subset=required_cols)
+            df_validate = df_validate.dropna(subset=required_cols)
+            
+            logger.info(f"After NaN removal: Train={len(df_train)}, Validate={len(df_validate)}")
+        else:
+            # 既にNaN除去済み
+            available_x_columns = [col for col in x_columns if col in df.columns]
+        
+        if len(df_train) < 2 or len(df_validate) < 1:
+            raise HTTPException(status_code=400, detail=f"Insufficient data for train/validation split: train={len(df_train)}, validate={len(df_validate)}")
+        
+        # 元のanalyize_ml関数（行338）
+        df_train_result, df_validate_result, trained_model, metrics = analyze_ml(
+            model, df_train, df_validate, available_x_columns, y_column
+        )
+        
+        # 元のdraw_scatter_plot関数（行356-357）
+        scatter_train = draw_scatter_plot(
+            df_train_result[y_column], 
+            df_train_result['pred'], 
+            'Train Data', 
+            metrics
+        )
+        scatter_validate = draw_scatter_plot(
+            df_validate_result[y_column], 
+            df_validate_result['pred'], 
+            'Validate Data', 
+            metrics
+        )
+        
+        # 元のdraw_feature_importance関数（行374）
+        feature_importance = {}
+        feature_importance_plot = ""
+        if hasattr(trained_model, 'feature_importances_'):
+            for i, feature in enumerate(available_x_columns):
+                feature_importance[feature] = float(trained_model.feature_importances_[i])
+            feature_importance_plot = draw_feature_importance(trained_model, available_x_columns)
+        
+        logger.info(f"Training completed. Train samples: {len(df_train_result)}, Validate samples: {len(df_validate_result)}")
+        
+        return schemas.ProcessEachResponse(
+            model_name=request.model_name,
+            data_type=request.data_type,
+            metrics=metrics,
+            scatter_train=scatter_train,
+            scatter_validate=scatter_validate,
+            feature_importance_plot=feature_importance_plot,
+            feature_importance=feature_importance,
+            train_count=len(df_train_result),
+            validate_count=len(df_validate_result),
+            train_predictions=df_train_result['pred'].tolist(),
+            validate_predictions=df_validate_result['pred'].tolist(),
+            train_actual=df_train_result[y_column].tolist(),
+            validate_actual=df_validate_result[y_column].tolist()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in process_each: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))

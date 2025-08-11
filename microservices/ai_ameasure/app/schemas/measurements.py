@@ -143,8 +143,8 @@ class DistanceDataResponse(BaseModel):
 
 
 class MLDatasetResponse(BaseModel):
-    settlement_data: List[Dict[str, float]] = Field(..., description="沈下量データ")
-    convergence_data: List[Dict[str, float]] = Field(..., description="変位量データ")
+    settlement_data: List[Dict[str, Any]] = Field(..., description="沈下量データ")
+    convergence_data: List[Dict[str, Any]] = Field(..., description="変位量データ")
 
 
 class MLDatasetRequest(BaseModel):
