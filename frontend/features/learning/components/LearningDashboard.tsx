@@ -24,6 +24,8 @@ export function LearningDashboard() {
     setFolder,
     model,
     setModel,
+    dataType,
+    setDataType,
     predictionTD,
     setPredictionTD,
     maxDistance,
@@ -41,8 +43,23 @@ export function LearningDashboard() {
     trainRSquaredB,
     validationRSquaredA,
     validationRSquaredB,
+    trainMSEA,
+    trainMSEB,
+    validationMSEA,
+    validationMSEB,
     handleAnalyze,
+    processEachData,
   } = useLearning();
+
+  // Debug logging
+  console.log('Dashboard render:', {
+    hasProcessEachData: !!processEachData,
+    trainScatterDataCount: trainScatterDataA?.length || 0,
+    validationScatterDataCount: validationScatterDataA?.length || 0,
+    trainMSEA,
+    trainRSquaredA,
+    isAnalyzing,
+  });
 
   const { loading: heatmapLoading, error: heatmapError } = useHeatmap();
 
@@ -86,9 +103,25 @@ export function LearningDashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Random Forest">Random Forest</SelectItem>
-                  <SelectItem value="Support Vector Machine">Support Vector Machine</SelectItem>
-                  <SelectItem value="Neural Network">Neural Network</SelectItem>
-                  <SelectItem value="Gradient Boosting">Gradient Boosting</SelectItem>
+                  <SelectItem value="Linear Regression">Linear Regression</SelectItem>
+                  <SelectItem value="SVR">SVR</SelectItem>
+                  <SelectItem value="HistGradientBoostingRegressor">Hist Gradient Boosting</SelectItem>
+                  <SelectItem value="MLP">MLP Neural Network</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="data-type-select" className="text-sm font-medium text-gray-700">
+                Data Type
+              </Label>
+              <Select value={dataType} onValueChange={(value: 'settlement' | 'convergence') => setDataType(value)}>
+                <SelectTrigger id="data-type-select" className="w-full">
+                  <SelectValue placeholder="データタイプを選択してください" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="settlement">Settlement (沈下量)</SelectItem>
+                  <SelectItem value="convergence">Convergence (変位量)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -187,19 +220,21 @@ export function LearningDashboard() {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Train Data</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <ScatterPlotSection
-            title="Actual vs Predicted for 変位量A上下 (Train Data)"
+            title={`Actual vs Predicted for ${dataType === 'settlement' ? '沈下量' : '変位量'}A (Train Data)`}
             data={trainScatterDataA}
             rSquared={trainRSquaredA}
-            xLabel="Actual 変位量A上下"
-            yLabel="Predicted 変位量A上下"
+            mse={trainMSEA}
+            xLabel={`Actual ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
+            yLabel={`Predicted ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
           />
           
           <ScatterPlotSection
-            title="Actual vs Predicted for 変位量B上下 (Train Data)"
+            title={`Actual vs Predicted for ${dataType === 'settlement' ? '沈下量' : '変位量'}B (Train Data)`}
             data={trainScatterDataB}
             rSquared={trainRSquaredB}
-            xLabel="Actual 変位量B上下"
-            yLabel="Predicted 変位量B上下"
+            mse={trainMSEB}
+            xLabel={`Actual ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
+            yLabel={`Predicted ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
           />
         </div>
       </div>
@@ -209,19 +244,21 @@ export function LearningDashboard() {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Validation Data</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <ScatterPlotSection
-            title="Actual vs Predicted for 変位量A上下 (Validation Data)"
+            title={`Actual vs Predicted for ${dataType === 'settlement' ? '沈下量' : '変位量'}A (Validation Data)`}
             data={validationScatterDataA}
             rSquared={validationRSquaredA}
-            xLabel="Actual 変位量A上下"
-            yLabel="Predicted 変位量A上下"
+            mse={validationMSEA}
+            xLabel={`Actual ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
+            yLabel={`Predicted ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
           />
           
           <ScatterPlotSection
-            title="Actual vs Predicted for 変位量B上下 (Validation Data)"
+            title={`Actual vs Predicted for ${dataType === 'settlement' ? '沈下量' : '変位量'}B (Validation Data)`}
             data={validationScatterDataB}
             rSquared={validationRSquaredB}
-            xLabel="Actual 変位量B上下"
-            yLabel="Predicted 変位量B上下"
+            mse={validationMSEB}
+            xLabel={`Actual ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
+            yLabel={`Predicted ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
           />
         </div>
       </div>
@@ -231,12 +268,12 @@ export function LearningDashboard() {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Feature Importance</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <FeatureImportanceSection
-            title="Feature Importance for 変位量A上下"
+            title={`Feature Importance for ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
             data={featureImportanceA}
           />
           
           <FeatureImportanceSection
-            title="Feature Importance for 変位量B上下"
+            title={`Feature Importance for ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
             data={featureImportanceB}
           />
         </div>
