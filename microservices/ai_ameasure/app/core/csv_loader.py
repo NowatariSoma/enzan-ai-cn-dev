@@ -2,90 +2,150 @@
 CSVファイルの読み込みとデータ処理を行うモジュール
 """
 
-import pandas as pd
-import numpy as np
-from pathlib import Path
-import warnings
-import os
-from typing import Dict, List, Optional, Tuple, Union
-from datetime import datetime
 import logging
+import os
+import warnings
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+
 class CSVDataLoader:
     """CSVファイルの読み込みとデータ処理を行うクラス"""
-    
+
     def __init__(self):
-        self.Y_COLUMNS = ['沈下量1', '沈下量2', '沈下量3', '変位量A', '変位量B', '変位量C']
+        self.Y_COLUMNS = ["沈下量1", "沈下量2", "沈下量3", "変位量A", "変位量B", "変位量C"]
         self.DISTANCES_FROM_FACE = [3, 5, 10, 20, 50, 100]
         self.DURATION_DAYS = 90
-        self.CYCLE_NO = 'ｻｲｸﾙNo'
-        self.TD_NO = 'TD(m)'
-        self.STA = 'STA'
-        self.DATE = '計測日時'
-        self.SECTION_TD = '実TD'
-        self.FACE_TD = '切羽TD'
-        self.CONVERGENCES = ['変位量A', '変位量B', '変位量C', '変位量D', '変位量E', '変位量F', '変位量G', '変位量H', '変位量I']
-        self.SETTLEMENTS = ['沈下量1', '沈下量2', '沈下量3', '沈下量4', '沈下量5', '沈下量6', '沈下量7']
-        self.CONVERGENCE_OFFSETS = ['変位量ｵﾌｾｯﾄA', '変位量ｵﾌｾｯﾄB', '変位量ｵﾌｾｯﾄC', '変位量ｵﾌｾｯﾄD', '変位量ｵﾌｾｯﾄE', '変位量ｵﾌｾｯﾄF', '変位量ｵﾌｾｯﾄG', '変位量ｵﾌｾｯﾄH', '変位量ｵﾌｾｯﾄI']
-        self.SETTLEMENT_OFFSETS = ['沈下量ｵﾌｾｯﾄ1', '沈下量ｵﾌｾｯﾄ2', '沈下量ｵﾌｾｯﾄ3', '沈下量ｵﾌｾｯﾄ4', '沈下量ｵﾌｾｯﾄ5', '沈下量ｵﾌｾｯﾄ6', '沈下量ｵﾌｾｯﾄ7']
-        self.DISTANCE_FROM_FACE = '切羽からの距離'
-        self.DAYS_FROM_START = '計測経過日数'
-        self.DIFFERENCE_FROM_FINAL_CONVERGENCES = ['最終変位量との差分A', '最終変位量との差分B', '最終変位量との差分C', '最終変位量との差分D', '最終変位量との差分E', '最終変位量との差分F', '最終変位量との差分G', '最終変位量との差分H', '最終変位量との差分I']
-        self.DIFFERENCE_FROM_FINAL_SETTLEMENTS = ['最終沈下量との差分1', '最終沈下量との差分2', '最終沈下量との差分3', '最終沈下量との差分4', '最終沈下量との差分5', '最終沈下量との差分6', '最終沈下量との差分7']
+        self.CYCLE_NO = "ｻｲｸﾙNo"
+        self.TD_NO = "TD(m)"
+        self.STA = "STA"
+        self.DATE = "計測日時"
+        self.SECTION_TD = "実TD"
+        self.FACE_TD = "切羽TD"
+        self.CONVERGENCES = [
+            "変位量A",
+            "変位量B",
+            "変位量C",
+            "変位量D",
+            "変位量E",
+            "変位量F",
+            "変位量G",
+            "変位量H",
+            "変位量I",
+        ]
+        self.SETTLEMENTS = [
+            "沈下量1",
+            "沈下量2",
+            "沈下量3",
+            "沈下量4",
+            "沈下量5",
+            "沈下量6",
+            "沈下量7",
+        ]
+        self.CONVERGENCE_OFFSETS = [
+            "変位量ｵﾌｾｯﾄA",
+            "変位量ｵﾌｾｯﾄB",
+            "変位量ｵﾌｾｯﾄC",
+            "変位量ｵﾌｾｯﾄD",
+            "変位量ｵﾌｾｯﾄE",
+            "変位量ｵﾌｾｯﾄF",
+            "変位量ｵﾌｾｯﾄG",
+            "変位量ｵﾌｾｯﾄH",
+            "変位量ｵﾌｾｯﾄI",
+        ]
+        self.SETTLEMENT_OFFSETS = [
+            "沈下量ｵﾌｾｯﾄ1",
+            "沈下量ｵﾌｾｯﾄ2",
+            "沈下量ｵﾌｾｯﾄ3",
+            "沈下量ｵﾌｾｯﾄ4",
+            "沈下量ｵﾌｾｯﾄ5",
+            "沈下量ｵﾌｾｯﾄ6",
+            "沈下量ｵﾌｾｯﾄ7",
+        ]
+        self.DISTANCE_FROM_FACE = "切羽からの距離"
+        self.DAYS_FROM_START = "計測経過日数"
+        self.DIFFERENCE_FROM_FINAL_CONVERGENCES = [
+            "最終変位量との差分A",
+            "最終変位量との差分B",
+            "最終変位量との差分C",
+            "最終変位量との差分D",
+            "最終変位量との差分E",
+            "最終変位量との差分F",
+            "最終変位量との差分G",
+            "最終変位量との差分H",
+            "最終変位量との差分I",
+        ]
+        self.DIFFERENCE_FROM_FINAL_SETTLEMENTS = [
+            "最終沈下量との差分1",
+            "最終沈下量との差分2",
+            "最終沈下量との差分3",
+            "最終沈下量との差分4",
+            "最終沈下量との差分5",
+            "最終沈下量との差分6",
+            "最終沈下量との差分7",
+        ]
 
     def generate_file_paths(self, input_folder: str) -> Tuple[List[str], str, str]:
         """
         入力フォルダから必要なCSVファイルのパスを生成する
-        
+
         Args:
             input_folder (str): 入力フォルダのパス
-            
+
         Returns:
-            Tuple[List[str], str, str]: 
+            Tuple[List[str], str, str]:
                 - measurement_a_csvs: measurements_Aフォルダ内のCSVファイルパスのリスト
                 - cycle_support_csv: cycle_support.csvのパス
                 - observation_of_face_csv: observation_of_face.csvのパス
-                
+
         Raises:
             FileNotFoundError: 必要なフォルダやファイルが見つからない場合
         """
 
         # measurements_Aフォルダ内のCSVファイルを取得
-        measurements_a_dir = os.path.join(input_folder, 'measurements_A')
+        measurements_a_dir = os.path.join(input_folder, "measurements_A")
         measurement_a_csvs = [
-            os.path.join(measurements_a_dir, f) 
-            for f in os.listdir(measurements_a_dir) 
-            if f.endswith('.csv')
+            os.path.join(measurements_a_dir, f)
+            for f in os.listdir(measurements_a_dir)
+            if f.endswith(".csv")
         ]
 
         # cycle_support.csvのパスを生成
-        cycle_support_csv = os.path.join(input_folder, 'cycle_support', 'cycle_support.csv')
+        cycle_support_csv = os.path.join(input_folder, "cycle_support", "cycle_support.csv")
 
         # observation_of_face.csvのパスを生成
-        observation_of_face_csv = os.path.join(input_folder, 'observation_of_face', 'observation_of_face.csv')
-        
-        logger.info(f"ファイルパス生成完了: {len(measurement_a_csvs)}個のmeasurement_Aファイル, cycle_support.csv, observation_of_face.csv")
-        
+        observation_of_face_csv = os.path.join(
+            input_folder, "observation_of_face", "observation_of_face.csv"
+        )
+
+        logger.info(
+            f"ファイルパス生成完了: {len(measurement_a_csvs)}個のmeasurement_Aファイル, cycle_support.csv, observation_of_face.csv"
+        )
+
         return measurement_a_csvs, cycle_support_csv, observation_of_face_csv
 
     def generate_additional_info_df(self, cycle_support_csv, observation_of_face_csv):
         try:
             df_cycle_support = pd.read_csv(cycle_support_csv).iloc[1:]
         except:
-            df_cycle_support = pd.read_csv(cycle_support_csv, encoding='cp932').iloc[1:]
+            df_cycle_support = pd.read_csv(cycle_support_csv, encoding="cp932").iloc[1:]
         try:
             df_observation_of_face = pd.read_csv(observation_of_face_csv)
         except:
-            df_observation_of_face = pd.read_csv(observation_of_face_csv, encoding='cp932')
+            df_observation_of_face = pd.read_csv(observation_of_face_csv, encoding="cp932")
         # Concatenate df_cycle_support and df_observation_of_face by their first columns
         df_additional_info = pd.merge(
-            df_cycle_support, 
-            df_observation_of_face, 
-            left_on=df_cycle_support.columns[0], 
-            right_on=df_observation_of_face.columns[0], 
-            how='inner'
+            df_cycle_support,
+            df_observation_of_face,
+            left_on=df_cycle_support.columns[0],
+            right_on=df_observation_of_face.columns[0],
+            how="inner",
         )
         df_additional_info.drop(columns=[self.STA], inplace=True)
         return df_additional_info
@@ -103,14 +163,14 @@ class CSVDataLoader:
 
         df_all = pd.concat(df_all)
         # Filter out rows where DISTANCE_FROM_FACE is less than or equal to -1
-        df_all = df_all[df_all[self.DISTANCE_FROM_FACE]>=-1]
+        df_all = df_all[df_all[self.DISTANCE_FROM_FACE] >= -1]
         # Filter out rows where DISTANCE_FROM_FACE is greater than 200
-        df_all = df_all[df_all[self.DISTANCE_FROM_FACE]<=max_distance_from_face]
+        df_all = df_all[df_all[self.DISTANCE_FROM_FACE] <= max_distance_from_face]
         settlements = [settle for settle in self.SETTLEMENTS if settle in df.columns]
         convergences = [conv for conv in self.CONVERGENCES if conv in df.columns]
         dct_df_settlement = {}
         dct_df_convergence = {}
-        dct_df_td ={}
+        dct_df_td = {}
         for distance_from_face in self.DISTANCES_FROM_FACE:
             if max_distance_from_face < distance_from_face:
                 continue
@@ -122,23 +182,27 @@ class CSVDataLoader:
                 rows = _df[_df[self.DISTANCE_FROM_FACE] <= distance_from_face]
                 if rows.empty:
                     continue
-                dfs.append(rows.iloc[-1][[self.TD_NO]+settlements+convergences])
-                dct_df_settlement[f"{distance_from_face}m"] += rows.iloc[-1][settlements].values.tolist()
-                dct_df_convergence[f"{distance_from_face}m"] += rows.iloc[-1][convergences].values.tolist()
+                dfs.append(rows.iloc[-1][[self.TD_NO] + settlements + convergences])
+                dct_df_settlement[f"{distance_from_face}m"] += rows.iloc[-1][
+                    settlements
+                ].values.tolist()
+                dct_df_convergence[f"{distance_from_face}m"] += rows.iloc[-1][
+                    convergences
+                ].values.tolist()
             dct_df_td[f"{distance_from_face}m"] = pd.DataFrame(dfs).reset_index()
 
         return df_all, dct_df_settlement, dct_df_convergence, dct_df_td, settlements, convergences
-    
+
     def proccess_a_measure_file(self, input_path, max_distance_from_face):
         # Read the CSV file, skipping the first 3 lines and using the 4th line as the header
-        df = pd.read_csv(input_path, skiprows=3, encoding='shift-jis', header=0)
+        df = pd.read_csv(input_path, skiprows=3, encoding="shift-jis", header=0)
         df = self.preprocess(df, max_distance_from_face)
-        
+
         return df
-    
+
     def preprocess(self, df, max_distance_from_face):
         # Convert DATE column to datetime
-        df[self.DATE] = pd.to_datetime(df[self.DATE], errors='coerce')
+        df[self.DATE] = pd.to_datetime(df[self.DATE], errors="coerce")
         df.set_index(self.DATE, inplace=True)
         # Remove columns where the sum of CONVERGENCES is 0
         for convergence in self.SETTLEMENTS + self.CONVERGENCES:
@@ -147,26 +211,36 @@ class CSVDataLoader:
         # Filter rows within DURATION_DAYS from the first row -> disable for now
         start_date = df.index[0]
         end_date = start_date + pd.Timedelta(days=self.DURATION_DAYS)
-        df = df[(df.index >= start_date) & (df.index <= end_date)].copy()  # Use .copy() to avoid SettingWithCopyWarning
+        df = df[
+            (df.index >= start_date) & (df.index <= end_date)
+        ].copy()  # Use .copy() to avoid SettingWithCopyWarning
         # Drop the STA column if it exists
         sta = df[self.STA].mode().iloc[0]
         if self.STA in df.columns:
             df = df.drop(columns=[self.STA])  # Avoid inplace operation on filtered dataframe
         # Group by day and take the daily average
-        df = df.resample('D').mean()
-        #df = df.interpolate(limit_direction='both', method='index').reset_index()
+        df = df.resample("D").mean()
+        # df = df.interpolate(limit_direction='both', method='index').reset_index()
         # Drop rows where all values are NaN
-        df = df.dropna(how='all').reset_index()
+        df = df.dropna(how="all").reset_index()
         df[self.STA] = sta
-        df = df[[self.DATE, self.CYCLE_NO, self.TD_NO, self.STA, self.SECTION_TD, self.FACE_TD] + self.SETTLEMENTS[:3] + self.CONVERGENCES[:3]]
+        df = df[
+            [self.DATE, self.CYCLE_NO, self.TD_NO, self.STA, self.SECTION_TD, self.FACE_TD]
+            + self.SETTLEMENTS[:3]
+            + self.CONVERGENCES[:3]
+        ]
         df[self.DISTANCE_FROM_FACE] = df[self.FACE_TD] - df[self.SECTION_TD].iloc[0]
-        df = df[df[self.DISTANCE_FROM_FACE]<=max_distance_from_face]
+        df = df[df[self.DISTANCE_FROM_FACE] <= max_distance_from_face]
         df[self.DAYS_FROM_START] = (df[self.DATE] - df[self.DATE].min()).dt.days
         for i, settlement in enumerate(self.SETTLEMENTS):
             if settlement in df.columns:
-                df[self.DIFFERENCE_FROM_FINAL_SETTLEMENTS[i]] = df[settlement].iloc[-1] - df[settlement]
+                df[self.DIFFERENCE_FROM_FINAL_SETTLEMENTS[i]] = (
+                    df[settlement].iloc[-1] - df[settlement]
+                )
         for i, convergence in enumerate(self.CONVERGENCES):
             if convergence in df.columns:
-                df[self.DIFFERENCE_FROM_FINAL_CONVERGENCES[i]] = df[convergence].iloc[-1] - df[convergence]
+                df[self.DIFFERENCE_FROM_FINAL_CONVERGENCES[i]] = (
+                    df[convergence].iloc[-1] - df[convergence]
+                )
 
         return df

@@ -2,13 +2,15 @@
 予測・シミュレーション関連のスキーマ
 """
 
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any, Union
 from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+
+from pydantic import BaseModel, Field
 
 
 class ModelType(str, Enum):
     """利用可能なモデルタイプ"""
+
     random_forest = "random_forest"
     linear_regression = "linear_regression"
     svr = "svr"
@@ -18,6 +20,7 @@ class ModelType(str, Enum):
 
 class PredictionTarget(str, Enum):
     """予測対象"""
+
     settlement = "settlement"
     convergence = "convergence"
     final_settlement = "final_settlement"
@@ -27,6 +30,7 @@ class PredictionTarget(str, Enum):
 # リクエストスキーマ
 class ModelConfigRequest(BaseModel):
     """モデル設定リクエスト"""
+
     model_name: str = Field(..., description="モデル名")
     model_type: ModelType = Field(..., description="モデルタイプ")
     params: Optional[Dict[str, Any]] = Field(default={}, description="モデルパラメータ")
@@ -34,6 +38,7 @@ class ModelConfigRequest(BaseModel):
 
 class TrainingRequest(BaseModel):
     """モデル訓練リクエスト"""
+
     model_name: str = Field(..., description="モデル名")
     folder_name: str = Field(default="01-hokkaido-akan", description="データフォルダ名")
     target_columns: Optional[List[str]] = Field(default=None, description="ターゲット列")
@@ -43,6 +48,7 @@ class TrainingRequest(BaseModel):
 
 class PredictionRequest(BaseModel):
     """予測リクエスト"""
+
     model_name: str = Field(..., description="モデル名")
     features: Dict[str, Union[float, int]] = Field(..., description="特徴量データ")
     folder_name: str = Field(default="01-hokkaido-akan", description="データフォルダ名")
@@ -50,6 +56,7 @@ class PredictionRequest(BaseModel):
 
 class SimulationRequest(BaseModel):
     """シミュレーションリクエスト"""
+
     folder_name: str = Field(default="01-hokkaido-akan", description="データフォルダ名")
     daily_advance: float = Field(default=2.0, ge=0.1, le=10.0, description="日進量 (m/day)")
     distance_from_face: float = Field(default=50.0, ge=0.0, description="現在の切羽からの距離 (m)")
@@ -59,16 +66,17 @@ class SimulationRequest(BaseModel):
     use_models: Dict[str, str] = Field(
         default={
             "settlement": "settlement",
-            "convergence": "convergence", 
+            "convergence": "convergence",
             "final_settlement": "final_settlement",
-            "final_convergence": "final_convergence"
+            "final_convergence": "final_convergence",
         },
-        description="使用するモデル"
+        description="使用するモデル",
     )
 
 
 class BatchProcessRequest(BaseModel):
     """バッチ処理リクエスト"""
+
     folder_names: List[str] = Field(..., description="処理対象フォルダ名リスト")
     max_distance_from_face: float = Field(default=200.0, description="最大距離")
     retrain_models: bool = Field(default=True, description="モデルを再訓練するか")
@@ -77,6 +85,7 @@ class BatchProcessRequest(BaseModel):
 # レスポンススキーマ
 class ModelInfo(BaseModel):
     """モデル情報"""
+
     name: str = Field(..., description="モデル名")
     type: str = Field(..., description="モデルタイプ")
     params: Dict[str, Any] = Field(..., description="モデルパラメータ")
@@ -86,11 +95,14 @@ class ModelInfo(BaseModel):
 
 class TrainingResult(BaseModel):
     """訓練結果"""
+
     model_name: str = Field(..., description="モデル名")
     training_score: float = Field(..., description="訓練スコア (R²)")
     validation_score: float = Field(..., description="検証スコア (R²)")
     test_score: Optional[float] = Field(None, description="テストスコア (R²)")
-    feature_importance: Optional[List[Dict[str, Union[str, float]]]] = Field(None, description="特徴量重要度")
+    feature_importance: Optional[List[Dict[str, Union[str, float]]]] = Field(
+        None, description="特徴量重要度"
+    )
     training_samples: int = Field(..., description="訓練サンプル数")
     validation_samples: int = Field(..., description="検証サンプル数")
     processing_time: float = Field(..., description="処理時間（秒）")
@@ -98,6 +110,7 @@ class TrainingResult(BaseModel):
 
 class PredictionResult(BaseModel):
     """予測結果"""
+
     model_name: str = Field(..., description="モデル名")
     prediction: Union[float, List[float]] = Field(..., description="予測値")
     features: Dict[str, Union[float, int]] = Field(..., description="入力特徴量")
@@ -106,6 +119,7 @@ class PredictionResult(BaseModel):
 
 class SimulationDataPoint(BaseModel):
     """シミュレーション結果の1データポイント"""
+
     day: int = Field(..., description="日数")
     distance_from_face: float = Field(..., description="切羽からの距離")
     td_position: float = Field(..., description="TD位置")
@@ -117,6 +131,7 @@ class SimulationDataPoint(BaseModel):
 
 class SimulationResult(BaseModel):
     """シミュレーション結果"""
+
     folder_name: str = Field(..., description="データフォルダ名")
     simulation_params: SimulationRequest = Field(..., description="シミュレーションパラメータ")
     data_points: List[SimulationDataPoint] = Field(..., description="シミュレーション結果データ")
@@ -126,6 +141,7 @@ class SimulationResult(BaseModel):
 
 class BatchProcessResult(BaseModel):
     """バッチ処理結果"""
+
     processed_folders: List[str] = Field(..., description="処理済みフォルダ")
     failed_folders: List[str] = Field(..., description="処理失敗フォルダ")
     training_results: List[TrainingResult] = Field(..., description="訓練結果")
@@ -135,12 +151,14 @@ class BatchProcessResult(BaseModel):
 
 class ModelListResponse(BaseModel):
     """モデル一覧レスポンス"""
+
     models: List[ModelInfo] = Field(..., description="モデル一覧")
     available_types: List[str] = Field(..., description="利用可能なモデルタイプ")
 
 
 class FeatureImportance(BaseModel):
     """特徴量重要度"""
+
     feature: str = Field(..., description="特徴量名")
     importance: float = Field(..., description="重要度")
     rank: int = Field(..., description="ランク")
@@ -148,6 +166,7 @@ class FeatureImportance(BaseModel):
 
 class ModelAnalysis(BaseModel):
     """モデル分析結果"""
+
     model_name: str = Field(..., description="モデル名")
     feature_importance: List[FeatureImportance] = Field(..., description="特徴量重要度")
     performance_metrics: Dict[str, float] = Field(..., description="性能指標")

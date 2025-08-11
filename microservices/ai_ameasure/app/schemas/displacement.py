@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class DisplacementData(BaseModel):
@@ -14,7 +15,9 @@ class DisplacementData(BaseModel):
 
 
 class DisplacementAnalysisRequest(BaseModel):
-    folder: str = Field(..., description="フォルダ名", json_schema_extra={"example": "01-hokkaido-akan"})
+    folder: str = Field(
+        ..., description="フォルダ名", json_schema_extra={"example": "01-hokkaido-akan"}
+    )
     model: str = Field("Random Forest", description="使用するモデル")
     prediction_td: int = Field(500, description="予測TD")
     max_distance: float = Field(100.0, description="最大距離")

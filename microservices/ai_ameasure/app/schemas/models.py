@@ -1,5 +1,6 @@
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Any
 
 
 class ModelInfo(BaseModel):
@@ -17,7 +18,9 @@ class ModelTrainRequest(BaseModel):
     model_name: str = Field(..., description="モデル名")
     data_path: str = Field(..., description="訓練データのパス")
     target_column: str = Field(..., description="予測対象のカラム名")
-    feature_columns: Optional[List[str]] = Field(None, description="特徴量として使用するカラム名のリスト")
+    feature_columns: Optional[List[str]] = Field(
+        None, description="特徴量として使用するカラム名のリスト"
+    )
 
 
 class ModelTrainResponse(BaseModel):
@@ -49,7 +52,9 @@ class ProcessEachRequest(BaseModel):
     max_distance_from_face: float = Field(default=100.0, description="切羽からの最大距離")
     data_type: str = Field(..., description="データタイプ：settlement または convergence")
     td: Optional[float] = Field(None, description="訓練・検証データ分割用のTD値")
-    predict_final: bool = Field(default=True, description="True: 最終変位量を予測, False: 現在の変位量を予測")
+    predict_final: bool = Field(
+        default=True, description="True: 最終変位量を予測, False: 現在の変位量を予測"
+    )
 
 
 class ProcessEachResponse(BaseModel):

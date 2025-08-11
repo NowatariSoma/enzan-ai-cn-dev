@@ -2,18 +2,26 @@
 機械学習予測・シミュレーション関連のAPIエンドポイント
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from typing import List, Dict, Any
 import logging
 from pathlib import Path
+from typing import Any, Dict, List
 
 from app import schemas
 from app.core.prediction_engine import PredictionEngine
 from app.schemas.prediction import (
-    ModelConfigRequest, TrainingRequest, PredictionRequest, SimulationRequest,
-    BatchProcessRequest, ModelListResponse, TrainingResult, PredictionResult,
-    SimulationResult, BatchProcessResult, ModelInfo
+    BatchProcessRequest,
+    BatchProcessResult,
+    ModelConfigRequest,
+    ModelInfo,
+    ModelListResponse,
+    PredictionRequest,
+    PredictionResult,
+    SimulationRequest,
+    SimulationResult,
+    TrainingRequest,
+    TrainingResult,
 )
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +59,7 @@ async def get_model_info(model_name: str) -> ModelInfo:
 
 @router.post("/models/{model_name}/train", response_model=TrainingResult)
 async def train_model(
-    model_name: str,
-    request: TrainingRequest,
-    background_tasks: BackgroundTasks
+    model_name: str, request: TrainingRequest, background_tasks: BackgroundTasks
 ) -> TrainingResult:
     """
     モデルを訓練
@@ -61,16 +67,16 @@ async def train_model(
     try:
         # ターゲットタイプを決定
         target_type = "settlement" if "settlement" in model_name else "convergence"
-        
+
         result = prediction_engine.train_model(
             model_name=model_name,
             folder_name=request.folder_name,
             target_type=target_type,
-            test_size=request.test_size
+            test_size=request.test_size,
         )
-        
+
         return TrainingResult(**result)
-        
+
     except Exception as e:
         logger.error(f"Error training model {model_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -83,13 +89,11 @@ async def predict(model_name: str, request: PredictionRequest) -> PredictionResu
     """
     try:
         result = prediction_engine.predict(
-            model_name=model_name,
-            features=request.features,
-            folder_name=request.folder_name
+            model_name=model_name, features=request.features, folder_name=request.folder_name
         )
-        
+
         return PredictionResult(**result)
-        
+
     except Exception as e:
         logger.error(f"Error during prediction with {model_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -108,11 +112,11 @@ async def simulate_displacement(request: SimulationRequest) -> SimulationResult:
             max_distance=request.max_distance,
             prediction_days=request.prediction_days,
             recursive=request.recursive,
-            use_models=request.use_models
+            use_models=request.use_models,
         )
-        
+
         return SimulationResult(**result)
-        
+
     except Exception as e:
         logger.error(f"Error during simulation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -120,63 +124,72 @@ async def simulate_displacement(request: SimulationRequest) -> SimulationResult:
 
 @router.post("/batch-process", response_model=BatchProcessResult)
 async def batch_process(
-    request: BatchProcessRequest,
-    background_tasks: BackgroundTasks
+    request: BatchProcessRequest, background_tasks: BackgroundTasks
 ) -> BatchProcessResult:
     """
     バッチ処理（複数フォルダの一括処理）
     """
     try:
         import time
+
         start_time = time.time()
-        
+
         processed_folders = []
         failed_folders = []
         training_results = []
-        
+
         for folder_name in request.folder_names:
             try:
                 logger.info(f"Processing folder: {folder_name}")
-                
+
                 # 各モデルを訓練（再訓練が有効な場合）
                 if request.retrain_models:
-                    models_to_train = ["settlement", "convergence", "final_settlement", "final_convergence"]
-                    
+                    models_to_train = [
+                        "settlement",
+                        "convergence",
+                        "final_settlement",
+                        "final_convergence",
+                    ]
+
                     for model_name in models_to_train:
                         try:
-                            target_type = "settlement" if "settlement" in model_name else "convergence"
-                            
+                            target_type = (
+                                "settlement" if "settlement" in model_name else "convergence"
+                            )
+
                             result = prediction_engine.train_model(
                                 model_name=f"{folder_name}_{model_name}",
                                 folder_name=folder_name,
-                                target_type=target_type
+                                target_type=target_type,
                             )
-                            
+
                             training_results.append(TrainingResult(**result))
-                            
+
                         except Exception as e:
                             logger.warning(f"Failed to train {model_name} for {folder_name}: {e}")
-                
+
                 processed_folders.append(folder_name)
                 logger.info(f"Successfully processed {folder_name}")
-                
+
             except Exception as e:
                 logger.error(f"Failed to process {folder_name}: {e}")
                 failed_folders.append(folder_name)
-        
+
         total_processing_time = time.time() - start_time
-        success_rate = len(processed_folders) / len(request.folder_names) if request.folder_names else 0.0
-        
+        success_rate = (
+            len(processed_folders) / len(request.folder_names) if request.folder_names else 0.0
+        )
+
         result = {
             "processed_folders": processed_folders,
             "failed_folders": failed_folders,
             "training_results": [result.dict() for result in training_results],
             "total_processing_time": total_processing_time,
-            "success_rate": success_rate
+            "success_rate": success_rate,
         }
-        
+
         return BatchProcessResult(**result)
-        
+
     except Exception as e:
         logger.error(f"Error during batch processing: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -189,16 +202,14 @@ async def update_model_config(model_name: str, request: ModelConfigRequest):
     """
     try:
         model = prediction_engine.model_manager.update_model_type(
-            model_name=request.model_name,
-            new_type=request.model_type,
-            new_params=request.params
+            model_name=request.model_name, new_type=request.model_type, new_params=request.params
         )
-        
+
         # 設定を保存
         prediction_engine.model_manager.save_config()
-        
+
         return {"message": f"Model {model_name} configuration updated successfully"}
-        
+
     except Exception as e:
         logger.error(f"Error updating model config for {model_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -214,13 +225,13 @@ async def delete_model(model_name: str):
         model_path = prediction_engine.model_manager.config.get_model_save_path(model_name)
         if Path(model_path).exists():
             Path(model_path).unlink()
-        
+
         # メモリからも削除
         if model_name in prediction_engine.model_manager.models:
             del prediction_engine.model_manager.models[model_name]
-        
+
         return {"message": f"Model {model_name} deleted successfully"}
-        
+
     except Exception as e:
         logger.error(f"Error deleting model {model_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -233,45 +244,35 @@ async def health_check():
     """
     try:
         # 簡単なテスト予測を実行
-        test_features = {'TD(m)': 100.0, '切羽TD': 100.0, '実TD': 100.0, 'ｻｲｸﾙNo': 1}
-        
+        test_features = {"TD(m)": 100.0, "切羽TD": 100.0, "実TD": 100.0, "ｻｲｸﾙNo": 1}
+
         status = {
             "status": "healthy",
             "available_models": len(prediction_engine.list_models()["models"]),
-            "available_types": prediction_engine.model_manager.get_available_model_types()
+            "available_types": prediction_engine.model_manager.get_available_model_types(),
         }
-        
+
         return status
-        
+
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+        return {"status": "unhealthy", "error": str(e)}
 
 
 # Quick prediction endpoints for common use cases
 @router.get("/quick-predict/settlement")
 async def quick_predict_settlement(
-    td: float = 100.0,
-    cycle: int = 1,
-    folder_name: str = "01-hokkaido-akan"
+    td: float = 100.0, cycle: int = 1, folder_name: str = "01-hokkaido-akan"
 ):
     """
     沈下量の簡易予測
     """
     try:
-        features = {
-            'TD(m)': td,
-            '切羽TD': td,
-            '実TD': td,
-            'ｻｲｸﾙNo': cycle
-        }
-        
+        features = {"TD(m)": td, "切羽TD": td, "実TD": td, "ｻｲｸﾙNo": cycle}
+
         result = prediction_engine.predict("settlement", features, folder_name)
         return result
-        
+
     except Exception as e:
         logger.error(f"Error in quick settlement prediction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -279,24 +280,17 @@ async def quick_predict_settlement(
 
 @router.get("/quick-predict/convergence")
 async def quick_predict_convergence(
-    td: float = 100.0,
-    cycle: int = 1,
-    folder_name: str = "01-hokkaido-akan"
+    td: float = 100.0, cycle: int = 1, folder_name: str = "01-hokkaido-akan"
 ):
     """
     変位量の簡易予測
     """
     try:
-        features = {
-            'TD(m)': td,
-            '切羽TD': td,
-            '実TD': td,
-            'ｻｲｸﾙNo': cycle
-        }
-        
+        features = {"TD(m)": td, "切羽TD": td, "実TD": td, "ｻｲｸﾙNo": cycle}
+
         result = prediction_engine.predict("convergence", features, folder_name)
         return result
-        
+
     except Exception as e:
         logger.error(f"Error in quick convergence prediction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
