@@ -9,11 +9,16 @@ import { useMeasurementsData } from '../hooks/useMeasurementsData';
 
 // カスタムバーシェイプ - 全シリーズを同じ位置に重ねて描画
 const CustomOverlayShape = (props: any) => {
-  const { fill, x, y, width, height, payload, background } = props;
+  const { x, y, width, height, payload, dataKey } = props;
+  
+  // dataKeyがdummyBaseの場合のみ全シリーズを描画
+  if (dataKey !== 'dummyBase') return <g />;
   
   const allDataKeys = ['series3m', 'series5m', 'series10m', 'series20m', 'series50m', 'series100m'];
   const colors = ['#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#6B7280'];
   
+  // heightはdummyBaseの値に対応する高さなので、そのまま使用
+  const baseValue = payload.dummyBase || 1;
   
   return (
     <g>
@@ -21,9 +26,9 @@ const CustomOverlayShape = (props: any) => {
         const value = payload[key];
         if (!value || value === 0) return null;
         
-        // 各バーの高さを値に比例して計算
-        // heightは最大値（series3m）のバーの高さなので、各値に応じて調整
-        const barHeight = (value / payload.series3m) * height;
+        // dummyBaseを基準に各バーの高さを計算
+        const ratio = value / baseValue;
+        const barHeight = height * ratio;
         const barY = y + height - barHeight;
         
         return (
@@ -278,8 +283,8 @@ export function MeasurementsPage() {
                         return null;
                       }}
                     />
-                    {/* カスタムシェイプを使用して全シリーズを重ねて描画 */}
-                    <Bar dataKey="series3m" shape={CustomOverlayShape} />
+                    {/* ダミーの基準バーにカスタムシェイプを適用して全シリーズを描画 */}
+                    <Bar dataKey="dummyBase" shape={CustomOverlayShape} />
                   </BarChart>
                 </ResponsiveContainer>
                 {/* 凡例 */}
@@ -368,8 +373,8 @@ export function MeasurementsPage() {
                         return null;
                       }}
                     />
-                    {/* カスタムシェイプを使用して全シリーズを重ねて描画 */}
-                    <Bar dataKey="series3m" shape={CustomOverlayShape} />
+                    {/* ダミーの基準バーにカスタムシェイプを適用して全シリーズを描画 */}
+                    <Bar dataKey="dummyBase" shape={CustomOverlayShape} />
                   </BarChart>
                 </ResponsiveContainer>
                 {/* 凡例 */}

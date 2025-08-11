@@ -121,6 +121,7 @@ export function useMeasurementsData() {
         series20m: 0,
         series50m: 0,
         series100m: 0,
+        dummyBase: 0,  // ダミーデータ（基準値用）
       };
       
       distances.forEach(distance => {
@@ -139,6 +140,17 @@ export function useMeasurementsData() {
           (point as any)[seriesKey] = count;
         }
       });
+      
+      // 全データの最大値を取得してdummyBaseに設定
+      const maxCount = Math.max(
+        point.series3m,
+        point.series5m,
+        point.series10m,
+        point.series20m,
+        point.series50m,
+        point.series100m
+      );
+      point.dummyBase = maxCount;
       
       result.push(point);
     }

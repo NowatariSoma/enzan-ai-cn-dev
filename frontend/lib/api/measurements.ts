@@ -32,6 +32,7 @@ export interface DistributionDataPoint {
   series20m: number;
   series50m: number;
   series100m: number;
+  dummyBase?: number;  // ダミーデータ（基準値用）
 }
 
 export interface DisplacementDistributionResponse {
