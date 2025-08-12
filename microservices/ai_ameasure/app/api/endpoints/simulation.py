@@ -1,99 +1,353 @@
 import math
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List
+import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-import numpy as np
+import joblib
 import pandas as pd
-from app import schemas
-from app.api import deps
 from app.core.config import settings
-from fastapi import APIRouter, Depends, HTTPException
+from app.displacement import DURATION_DAYS
+from app.displacement_temporal_spacial_analysis import (
+    DATE,
+    DISTANCE_FROM_FACE,
+    STA,
+    TD_NO,
+    create_dataset,
+    generate_additional_info_df,
+    generate_dataframes,
+)
+from app.schemas import simulation as schemas
+from fastapi import APIRouter, HTTPException, status
 
 router = APIRouter()
 
 
-def generate_simulation_data(
-    folder_name: str,
-    daily_advance: float,
-    distance_from_face: float,
-    max_distance: float,
-    recursive: bool,
-) -> List[schemas.SimulationDataPoint]:
+def draw_local_prediction_chart(
+    output_path: str, x_measure, df_measure_y, x_predict, df_predict_y, title: str
+):
     """
-    シミュレーションデータを生成
-    GUIのsimulate_displacement関数をAPIで実装
+    Generate prediction chart and save to file
     """
-    # モックデータ生成のパラメータ
-    DURATION_DAYS = 365  # 最大シミュレーション日数
-    max_record = math.ceil(min(max_distance / daily_advance, DURATION_DAYS))
+    import japanize_matplotlib  # noqa: F401
+    import matplotlib.pyplot as plt
 
-    simulation_data = []
-    base_date = datetime.now()
+    plt.figure(figsize=(10, 6))
+    cmap = plt.get_cmap("tab10")
 
-    # 複数の位置IDでシミュレーション
-    position_ids = ["A-1", "B-1", "C-1"]
+    for i, c in enumerate(df_measure_y.columns):
+        plt.plot(
+            x_measure,
+            df_measure_y[c],
+            label=c,
+            marker="x",
+            linestyle="--",
+            markersize=4,
+            alpha=0.5,
+            color=cmap(i),
+        )
 
-    for i in range(max_record):
-        current_date = base_date + timedelta(days=i)
-        current_distance = distance_from_face + (daily_advance * i)
+    for i, c in enumerate(df_predict_y.columns):
+        plt.plot(
+            x_predict,
+            df_predict_y[c],
+            label=["予測最終" + c],
+            marker="o",
+            linestyle="-",
+            markersize=4,
+            color=cmap(i),
+        )
 
-        if current_distance > max_distance:
-            break
+    plt.title(title)
+    plt.xlabel(DISTANCE_FROM_FACE)
+    plt.ylabel(f"(mm)")
+    plt.legend()
+    plt.grid()
+    plt.savefig(output_path)
+    plt.close()
 
-        for position_id in position_ids:
-            # ランダムノイズを追加してリアルなデータを生成
-            noise = (np.random.random() - 0.5) * 0.1
 
-            # 実測値（切羽までの距離のみ）
-            if current_distance <= distance_from_face:
-                settlement = np.sin(current_distance * 0.05) * 2.0 + noise
-                convergence = np.cos(current_distance * 0.04) * 1.5 + noise * 0.8
-            else:
-                settlement = 0
-                convergence = 0
+def simulate_displacement_logic(
+    input_folder: str,
+    a_measure_path: str,
+    max_distance_from_face: float,
+    daily_advance: Optional[float] = None,
+    distance_from_face: Optional[float] = None,
+    recursive: bool = False,
+):
+    """
+    Core displacement simulation logic extracted from GUI
+    """
+    cycle_support_csv = os.path.join(input_folder, "cycle_support/cycle_support.csv")
+    observation_of_face_csv = os.path.join(
+        input_folder, "observation_of_face/observation_of_face.csv"
+    )
 
-            # 予測値
-            settlement_prediction = np.sin(current_distance * 0.05) * 2.2 + noise * 1.2
-            convergence_prediction = np.cos(current_distance * 0.04) * 1.7 + noise * 1.0
+    df_additional_info = generate_additional_info_df(cycle_support_csv, observation_of_face_csv)
+    df_additional_info.drop(columns=[STA], inplace=True)
 
-            # 再帰的予測の場合、予測値を調整
-            if recursive and current_distance > distance_from_face:
-                settlement_prediction *= 0.9
-                convergence_prediction *= 0.85
+    # Process each CSV file using the preprocess function
+    df_all, _, _, _, settlements, convergences = generate_dataframes(
+        [a_measure_path], max_distance_from_face
+    )
 
-            simulation_data.append(
-                schemas.SimulationDataPoint(
-                    td_no=100 + i,
-                    date=current_date,
-                    distance_from_face=current_distance,
-                    position_id=position_id,
-                    settlement=settlement,
-                    settlement_prediction=settlement_prediction,
-                    convergence=convergence,
-                    convergence_prediction=convergence_prediction,
-                )
+    if daily_advance and distance_from_face:
+        # Create a new dataframe with the specified length and interval
+        max_record = math.ceil(min(max_distance_from_face / daily_advance, DURATION_DAYS))
+        df_all_actual = df_all[df_all[DISTANCE_FROM_FACE] < distance_from_face]
+
+        if df_all_actual.empty:
+            df_all_new = pd.DataFrame([df_all.iloc[0]] * max_record).reset_index()
+        else:
+            df_all_new = pd.DataFrame([df_all_actual.iloc[-1]] * max_record).reset_index()
+
+        df_all_new[DATE] = pd.to_datetime(df_all.iloc[0][DATE]) + pd.to_timedelta(
+            range(max_record), unit="D"
+        )
+        df_all_new[DISTANCE_FROM_FACE] = df_all.iloc[0][
+            DISTANCE_FROM_FACE
+        ] + daily_advance * pd.Series(range(max_record))
+        df_all = pd.concat(
+            [df_all_actual, df_all_new[distance_from_face <= df_all_new[DISTANCE_FROM_FACE]]],
+            ignore_index=True,
+        ).reset_index()
+
+    settlement_data, convergence_data = create_dataset(df_all, df_additional_info)
+
+    # Load models
+    output_folder = str(settings.OUTPUT_FOLDER)
+    model_paths = {
+        "final_value_prediction_model": [
+            os.path.join(output_folder, "model_final_settlement.pkl"),
+            os.path.join(output_folder, "model_final_convergence.pkl"),
+        ],
+        "prediction_model": [
+            os.path.join(output_folder, "model_settlement.pkl"),
+            os.path.join(output_folder, "model_convergence.pkl"),
+        ],
+    }
+
+    for i, ((df, x_columns, y_column), target) in enumerate(
+        zip([settlement_data, convergence_data], [settlements, convergences])
+    ):
+        if not os.path.exists(model_paths["final_value_prediction_model"][i]):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model file not found: {model_paths['final_value_prediction_model'][i]}",
             )
 
-    return simulation_data
+        final_model_data = joblib.load(model_paths["final_value_prediction_model"][i])
+        model_data = joblib.load(model_paths["prediction_model"][i])
+        
+        # Extract the actual model from the dictionary
+        final_model = final_model_data["model"] if isinstance(final_model_data, dict) else final_model_data
+        model = model_data["model"] if isinstance(model_data, dict) else model_data
+
+        if recursive:
+            # まずは沈下量・変位量を予測し、それに基づき最終沈下量・変位量を予測する
+            _y_column = x_columns[2]
+            _x_columns = [x for x in x_columns if x != _y_column]
+            _x_columns = [x for x in _x_columns if x != y_column]
+            _y_hat = model.predict(pd.DataFrame(df[_x_columns]))
+            df.loc[df[DISTANCE_FROM_FACE] > distance_from_face, _y_column] = _y_hat[
+                df[DISTANCE_FROM_FACE] > distance_from_face
+            ]
+
+        y_hat = final_model.predict(df[x_columns])
+        for position_id in df["position_id"].unique():
+            df_all[f"{target[position_id]}_prediction"] = (
+                y_hat[df["position_id"] == position_id] + df_all[target[position_id]]
+            )
+
+    return df_all, settlements, convergences
+
+
+from pydantic import BaseModel
+
+class LocalDisplacementRequest(BaseModel):
+    folder_name: str
+    ameasure_file: str
+    distance_from_face: float
+    daily_advance: float
+    max_distance_from_face: float = 200.0
+
+@router.post("/local-displacement", response_model=Dict[str, Any])
+async def analyze_local_displacement(
+    request: LocalDisplacementRequest
+) -> Dict[str, Any]:
+    """
+    Analyze local displacement based on GUI tab2 functionality
+
+    Args:
+        request: LocalDisplacementRequest containing all parameters
+
+    Returns:
+        Dictionary containing prediction results, simulation results, and chart paths
+    """
+    try:
+        # Extract parameters from request
+        folder_name = request.folder_name
+        ameasure_file = request.ameasure_file
+        distance_from_face = request.distance_from_face
+        daily_advance = request.daily_advance
+        max_distance_from_face = request.max_distance_from_face
+        
+        # Setup paths using settings
+        input_base = str(settings.DATA_FOLDER)
+        input_folder = os.path.join(input_base, folder_name, "main_tunnel", "CN_measurement_data")
+        a_measure_path = os.path.join(input_folder, "measurements_A", ameasure_file)
+        output_folder = str(settings.OUTPUT_FOLDER)
+
+        # Ensure output directory exists
+        os.makedirs(output_folder, exist_ok=True)
+
+        # Check if input files exist
+        if not os.path.exists(a_measure_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Measurement file not found: {a_measure_path}",
+            )
+
+        # Prediction phase
+        df_all, settlements, convergences = simulate_displacement_logic(
+            input_folder, a_measure_path, max_distance_from_face
+        )
+
+        td = float(df_all[TD_NO].values[0])
+        cycle_no = float(os.path.basename(a_measure_path).split("_")[2].split(".")[0])
+
+        # Generate prediction charts
+        settlement_prediction_path = os.path.join(
+            output_folder, f"settlement_prediction_{cycle_no}.png"
+        )
+        convergence_prediction_path = os.path.join(
+            output_folder, f"convergence_prediction_{cycle_no}.png"
+        )
+
+        draw_local_prediction_chart(
+            settlement_prediction_path,
+            df_all[DISTANCE_FROM_FACE],
+            df_all[settlements],
+            df_all[DISTANCE_FROM_FACE],
+            df_all[[l + "_prediction" for l in settlements]],
+            f"最終沈下量予測 for Cycle {cycle_no} (TD: {td})",
+        )
+
+        draw_local_prediction_chart(
+            convergence_prediction_path,
+            df_all[DISTANCE_FROM_FACE],
+            df_all[convergences],
+            df_all[DISTANCE_FROM_FACE],
+            df_all[[l + "_prediction" for l in convergences]],
+            f"最終変位量予測 for Cycle {cycle_no} (TD: {td})",
+        )
+
+        # Simulation phase with recursive prediction
+        df_all_simulated, _, _ = simulate_displacement_logic(
+            input_folder,
+            a_measure_path,
+            max_distance_from_face,
+            daily_advance,
+            distance_from_face,
+            recursive=True,
+        )
+
+        # Save simulation results to CSV
+        simulation_csv_path = os.path.join(
+            output_folder, f"{folder_name}_{os.path.basename(a_measure_path)}"
+        )
+        df_all_simulated.to_csv(simulation_csv_path, index=False)
+
+        # Generate simulation charts
+        settlement_simulation_path = os.path.join(
+            output_folder, f"settlement_simulation_{cycle_no}.png"
+        )
+        convergence_simulation_path = os.path.join(
+            output_folder, f"convergence_simulation_{cycle_no}.png"
+        )
+
+        draw_local_prediction_chart(
+            settlement_simulation_path,
+            df_all[DISTANCE_FROM_FACE],
+            df_all[settlements],
+            df_all_simulated[DISTANCE_FROM_FACE],
+            df_all_simulated[[l + "_prediction" for l in settlements]],
+            f"最終沈下量予測 for Cycle {cycle_no} (TD: {td})",
+        )
+
+        draw_local_prediction_chart(
+            convergence_simulation_path,
+            df_all[DISTANCE_FROM_FACE],
+            df_all[convergences],
+            df_all_simulated[DISTANCE_FROM_FACE],
+            df_all_simulated[[l + "_prediction" for l in convergences]],
+            f"最終変位量予測 for Cycle {cycle_no} (TD: {td})",
+        )
+
+        # Prepare response data
+        response_data = {
+            "folder_name": folder_name,
+            "cycle_no": cycle_no,
+            "td": td,
+            "distance_from_face": distance_from_face,
+            "daily_advance": daily_advance,
+            "prediction_charts": {
+                "settlement": settlement_prediction_path,
+                "convergence": convergence_prediction_path,
+            },
+            "simulation_charts": {
+                "settlement": settlement_simulation_path,
+                "convergence": convergence_simulation_path,
+            },
+            "simulation_csv": simulation_csv_path,
+            "simulation_data": df_all_simulated[
+                [DISTANCE_FROM_FACE] + [l + "_prediction" for l in convergences + settlements]
+            ].to_dict(orient="records"),
+            "timestamp": datetime.now(),
+        }
+
+        return response_data
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error in local displacement analysis: {str(e)}",
+        )
 
 
 @router.post("/simulate", response_model=schemas.SimulationResponse)
 async def simulate_displacement(request: schemas.SimulationRequest) -> schemas.SimulationResponse:
     """
-    変位予測シミュレーションを実行
-
-    - 日進量と現在の切羽からの距離を指定してシミュレーション
-    - 再帰的予測オプションあり
+    General displacement simulation endpoint (keeping existing functionality)
     """
     try:
-        simulation_data = generate_simulation_data(
-            request.folder_name,
-            request.daily_advance,
-            request.distance_from_face,
-            request.max_distance,
-            request.recursive,
-        )
+        # This maintains the existing mock functionality for compatibility
+        # You can extend this to use the real simulate_displacement_logic if needed
+        simulation_data = []
+        base_date = datetime.now()
+        position_ids = ["A-1", "B-1", "C-1"]
+
+        max_record = math.ceil(min(request.max_distance / request.daily_advance, DURATION_DAYS))
+
+        for i in range(max_record):
+            current_date = base_date + pd.Timedelta(days=i)
+            current_distance = request.distance_from_face + (request.daily_advance * i)
+
+            if current_distance > request.max_distance:
+                break
+
+            for position_id in position_ids:
+                simulation_data.append(
+                    schemas.SimulationDataPoint(
+                        td_no=100 + i,
+                        date=current_date,
+                        distance_from_face=current_distance,
+                        position_id=position_id,
+                        settlement=0.0,  # Will be populated by real logic
+                        settlement_prediction=0.0,
+                        convergence=0.0,
+                        convergence_prediction=0.0,
+                    )
+                )
 
         return schemas.SimulationResponse(
             folder_name=request.folder_name,
@@ -107,273 +361,37 @@ async def simulate_displacement(request: schemas.SimulationRequest) -> schemas.S
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/chart-data", response_model=schemas.ChartDataResponse)
-async def get_chart_data(request: schemas.ChartDataRequest) -> schemas.ChartDataResponse:
+@router.get("/folders")
+async def list_folders() -> Dict[str, List[str]]:
     """
-    チャート描画用のデータを生成
+    List available folders for analysis
     """
-    chart_data = []
+    input_base = str(settings.DATA_FOLDER)
 
-    # チャートタイプに応じたデータ生成
-    if request.chart_type == "displacement":
-        # 変位量チャート（フロントエンドが期待する形式に合わせる）
-        for i in range(50):
-            x_val = i * 4.0  # 0から200mまで
+    if not os.path.exists(input_base):
+        return {"folders": []}
 
-            # 実測値
-            chart_data.extend(
-                [
-                    schemas.ChartDataPoint(
-                        x=x_val,
-                        y=np.sin(x_val * 0.1) * 0.5 + (np.random.random() - 0.5) * 0.2,
-                        series="変位量A",
-                        label=f"変位量A at {x_val}m",
-                    ),
-                    schemas.ChartDataPoint(
-                        x=x_val,
-                        y=np.cos(x_val * 0.08) * 0.3 + (np.random.random() - 0.5) * 0.1,
-                        series="変位量B",
-                        label=f"変位量B at {x_val}m",
-                    ),
-                    schemas.ChartDataPoint(
-                        x=x_val,
-                        y=np.sin(x_val * 0.12) * 0.4 + (np.random.random() - 0.5) * 0.15,
-                        series="変位量C",
-                        label=f"変位量C at {x_val}m",
-                    ),
-                ]
-            )
+    folders = [f for f in os.listdir(input_base) if os.path.isdir(os.path.join(input_base, f))]
 
-            if request.include_predictions:
-                # 予測値
-                chart_data.extend(
-                    [
-                        schemas.ChartDataPoint(
-                            x=x_val,
-                            y=np.cos(x_val * 0.1) * 0.6 + (np.random.random() - 0.5) * 0.2,
-                            series="変位量A_prediction",
-                            label=f"変位量A予測 at {x_val}m",
-                        ),
-                        schemas.ChartDataPoint(
-                            x=x_val,
-                            y=np.sin(x_val * 0.09) * 0.35 + (np.random.random() - 0.5) * 0.1,
-                            series="変位量B_prediction",
-                            label=f"変位量B予測 at {x_val}m",
-                        ),
-                        schemas.ChartDataPoint(
-                            x=x_val,
-                            y=np.cos(x_val * 0.11) * 0.45 + (np.random.random() - 0.5) * 0.15,
-                            series="変位量C_prediction",
-                            label=f"変位量C予測 at {x_val}m",
-                        ),
-                    ]
-                )
-
-        return schemas.ChartDataResponse(
-            chart_type=request.chart_type,
-            data=chart_data,
-            x_label="切羽からの距離 (m)",
-            y_label="変位量 (mm)",
-            title="変位量の推移",
-        )
-
-    elif request.chart_type == "settlement":
-        # 沈下量チャート
-        for i in range(50):
-            x_val = i * 4.0
-            chart_data.extend(
-                [
-                    schemas.ChartDataPoint(
-                        x=x_val,
-                        y=np.sin(x_val * 0.05) * 2.0,
-                        series="沈下量実測",
-                        label=f"実測 at {x_val}m",
-                    )
-                ]
-            )
-
-            if request.include_predictions:
-                chart_data.append(
-                    schemas.ChartDataPoint(
-                        x=x_val,
-                        y=np.sin(x_val * 0.05) * 2.2,
-                        series="沈下量予測",
-                        label=f"予測 at {x_val}m",
-                    )
-                )
-
-        return schemas.ChartDataResponse(
-            chart_type=request.chart_type,
-            data=chart_data,
-            x_label="切羽からの距離 (m)",
-            y_label="沈下量 (mm)",
-            title="沈下量の推移",
-        )
-
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown chart type: {request.chart_type}")
+    return {"folders": sorted(folders)}
 
 
-@router.get("/config", response_model=schemas.ModelConfigListResponse)
-async def get_model_config() -> schemas.ModelConfigListResponse:
+@router.get("/measurements/{folder_name}")
+async def list_measurement_files(folder_name: str) -> Dict[str, List[str]]:
     """
-    現在のモデル設定を取得
+    List CSV measurement files for a given folder
     """
-    # モックデータとしてデフォルト設定を返す
-    configs = {
-        "settlement": schemas.ModelConfigResponse(
-            model_name="settlement",
-            model_type="RandomForest",
-            parameters={"n_estimators": 100, "random_state": 42},
-            is_fitted=True,
-        ),
-        "final_settlement": schemas.ModelConfigResponse(
-            model_name="final_settlement",
-            model_type="RandomForest",
-            parameters={"n_estimators": 100, "random_state": 42},
-            is_fitted=True,
-        ),
-        "convergence": schemas.ModelConfigResponse(
-            model_name="convergence",
-            model_type="HistGradientBoostingRegressor",
-            parameters={"random_state": 42},
-            is_fitted=True,
-        ),
-        "final_convergence": schemas.ModelConfigResponse(
-            model_name="final_convergence",
-            model_type="HistGradientBoostingRegressor",
-            parameters={"random_state": 42},
-            is_fitted=True,
-        ),
-    }
-
-    return schemas.ModelConfigListResponse(configs=configs)
-
-
-@router.post("/config", response_model=schemas.ModelConfigResponse)
-async def update_model_config(request: schemas.ModelConfigRequest) -> schemas.ModelConfigResponse:
-    """
-    モデル設定を更新
-    """
-    valid_models = ["settlement", "final_settlement", "convergence", "final_convergence"]
-    valid_types = [
-        "RandomForest",
-        "LinearRegression",
-        "SVR",
-        "HistGradientBoostingRegressor",
-        "MLPRegressor",
-    ]
-
-    if request.model_name not in valid_models:
-        raise HTTPException(status_code=400, detail=f"Invalid model name: {request.model_name}")
-
-    if request.model_type not in valid_types:
-        raise HTTPException(status_code=400, detail=f"Invalid model type: {request.model_type}")
-
-    # デフォルトパラメータ
-    default_params = {
-        "RandomForest": {"n_estimators": 100, "random_state": 42},
-        "LinearRegression": {},
-        "SVR": {"kernel": "linear", "C": 1.0},
-        "HistGradientBoostingRegressor": {"random_state": 42},
-        "MLPRegressor": {"hidden_layer_sizes": (100,), "max_iter": 1000},
-    }
-
-    parameters = request.parameters or default_params.get(request.model_type, {})
-
-    return schemas.ModelConfigResponse(
-        model_name=request.model_name,
-        model_type=request.model_type,
-        parameters=parameters,
-        is_fitted=False,  # 設定更新後は未訓練状態
+    input_base = str(settings.DATA_FOLDER)
+    measurements_path = os.path.join(
+        input_base, folder_name, "main_tunnel", "CN_measurement_data", "measurements_A"
     )
 
+    if not os.path.exists(measurements_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Measurements folder not found: {measurements_path}",
+        )
 
-@router.post("/batch-process", response_model=schemas.BatchProcessResponse)
-async def batch_process_folders(
-    request: schemas.BatchProcessRequest,
-) -> schemas.BatchProcessResponse:
-    """
-    複数フォルダをバッチ処理
-    """
-    results = []
-    total_time = 0
+    csv_files = [f for f in os.listdir(measurements_path) if f.endswith(".csv")]
 
-    for folder_name in request.folder_names:
-        start_time = datetime.now()
-
-        try:
-            # モック処理結果
-            processing_time = np.random.uniform(1.0, 3.0)  # 1-3秒のランダム処理時間
-
-            result = schemas.BatchProcessResult(
-                folder_name=folder_name,
-                success=True,
-                message=f"Successfully processed {folder_name}",
-                processing_time=processing_time,
-                result_data={
-                    "train_score": 0.85 + np.random.random() * 0.1,
-                    "validation_score": 0.80 + np.random.random() * 0.1,
-                    "num_samples": np.random.randint(1000, 5000),
-                },
-            )
-            results.append(result)
-
-        except Exception as e:
-            processing_time = (datetime.now() - start_time).total_seconds()
-            result = schemas.BatchProcessResult(
-                folder_name=folder_name,
-                success=False,
-                message=f"Failed to process {folder_name}: {str(e)}",
-                processing_time=processing_time,
-            )
-            results.append(result)
-
-        total_time += processing_time
-
-    successful_count = sum(1 for r in results if r.success)
-    failed_count = len(results) - successful_count
-
-    return schemas.BatchProcessResponse(
-        results=results,
-        total_folders=len(request.folder_names),
-        successful_folders=successful_count,
-        failed_folders=failed_count,
-        total_processing_time=total_time,
-    )
-
-
-@router.post("/additional-data", response_model=schemas.AdditionalDataResponse)
-async def get_additional_data(
-    request: schemas.AdditionalDataRequest,
-) -> schemas.AdditionalDataResponse:
-    """
-    追加データ（cycle_support, observation_of_face）を生成
-    """
-    response_data = {"folder_name": request.folder_name}
-
-    if request.include_cycle_support:
-        # サイクルサポートのモックデータ
-        response_data["cycle_support_data"] = {
-            "support_pattern": ["P1", "P2", "P3", "P1", "P2"],
-            "support_timing": [0, 24, 48, 72, 96],
-            "support_strength": [100, 120, 110, 105, 115],
-        }
-
-    if request.include_observation:
-        # 観測データのモックデータ
-        response_data["observation_data"] = {
-            "face_condition": ["Good", "Fair", "Good", "Poor", "Fair"],
-            "groundwater_level": [0.5, 0.8, 0.6, 1.2, 0.9],
-            "rock_quality": [85, 70, 80, 55, 65],
-        }
-
-    if request.include_cycle_support and request.include_observation:
-        # 結合データ
-        response_data["combined_data"] = {
-            "analysis_ready": True,
-            "total_records": 5,
-            "quality_score": 0.85,
-        }
-
-    return schemas.AdditionalDataResponse(**response_data)
+    return {"measurement_files": sorted(csv_files)}

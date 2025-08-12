@@ -12,7 +12,7 @@ services:
       - ../../ai_ameasure/app/master:/app/app/master:ro
       # データフォルダをマウント（実際のdata_folderディレクトリを使用）
       - ../../data_folder:/app/data:ro
-      - ../../output:/app/output
+      - ./output:/app/output
     environment:
       - PYTHONPATH=/app
       - DATA_FOLDER=/app/data
