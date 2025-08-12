@@ -1,0 +1,21 @@
+FROM node:22-alpine
+
+# Set working directory inside container
+WORKDIR /app
+
+# Copy only package.json and yarn.lock first to leverage Docker cache
+COPY frontend/package.json frontend/yarn.lock ./
+
+# Install dependencies with frozen lockfile for reproducibility
+RUN yarn install
+
+# Copy the rest of the frontend code
+COPY frontend/ ./
+
+# Build the application
+RUN yarn build
+
+EXPOSE 3000
+
+# Use npx to run next start, which will find the binary in node_modules
+CMD ["npx", "next", "start"]

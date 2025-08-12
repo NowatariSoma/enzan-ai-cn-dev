@@ -1,0 +1,6 @@
+REGISTRATION_EMAIL_SUBJECT = "本登録を完了してください"
+INVITE_USER = "invite_user"
+TEMPLATE_CONFIRM_PASSWORD = "mail_templates/confirm_password.html"
+FORGOT_PASSWORD_EMAIL_SUBJECT = "パスワードを再設定してください"
+TEMPLATE_FORGOT_PASSWORD = "mail_templates/forgot_password.html"
+FORGOT_PASSWORD_KEY = "forgot_password"

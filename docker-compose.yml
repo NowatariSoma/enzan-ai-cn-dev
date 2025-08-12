@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16
+    container_name: mlp_db
+    environment:
+      POSTGRES_DB: 'mlp_db'
+      POSTGRES_PASSWORD: 'postgres_pass'
+    env_file:
+      - ./backend/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    networks:
+      - mlp_network
+
+  backend:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    container_name: mlp_django_app
+    volumes:
+      - ./backend:/app/backend
+    ports:
+      - '8000:8000'
+    depends_on:
+      - db
+    env_file:
+      - ./backend/.env
+    networks:
+      - mlp_network
+
+volumes:
+  postgres_data:
+  label_studio_data:
+
+networks:
+  mlp_network:
+    driver: bridge
