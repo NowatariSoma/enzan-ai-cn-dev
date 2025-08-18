@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/forms/button';
+import { Badge } from '@/components/ui/data-display/badge';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -18,10 +19,16 @@ import {
   ChevronDown,
   Activity,
   BarChart3,
-  Brain
+  Brain,
+  MapPin,
+  Star,
+  Search,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { locations, getLocationsByRegion } from '@/lib/data/locations';
+import { useFavoriteLocations } from '@/lib/hooks/useFavoriteLocations';
 
 interface SidebarProps {
   isMobileOpen?: boolean;
@@ -135,13 +142,39 @@ function NavTitle({ label }: { label: string }) {
 
 export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['favorites', 'locations', 'ai-measure']);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteLocations();
+
+  // 初回読み込み時に選択された拠点を復元
+  useEffect(() => {
+    const stored = localStorage.getItem('selectedLocation');
+    if (stored) {
+      try {
+        const location = JSON.parse(stored);
+        if (location && location.id) {
+          setSelectedLocation(location.id);
+        }
+      } catch (error) {
+        console.error('Failed to parse selected location:', error);
+      }
+    }
+  }, []);
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
   };
 
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => 
+      prev.includes(section) 
+        ? prev.filter(s => s !== section)
+        : [...prev, section]
+    );
+  };
 
   const handleNavigateAndClose = (path: string) => {
     router.push(path);
@@ -149,6 +182,29 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
       onMobileClose();
     }
   };
+
+  // お気に入り拠点を取得
+  const favoriteLocations = locations.filter(loc => favoriteIds.includes(loc.id));
+  
+  // 検索フィルタリング
+  const filteredLocations = locations.filter(loc => 
+    loc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    loc.tunnelName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    loc.prefecture.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleLocationClick = (locationId: string) => {
+    const location = locations.find(loc => loc.id === locationId);
+    if (location) {
+      localStorage.setItem('selectedLocation', JSON.stringify(location));
+      setSelectedLocation(locationId);
+      // 拠点専用ダッシュボードへ遷移
+      handleNavigateAndClose(`/location/${locationId}`);
+    }
+  };
+
+  // 選択中の拠点を取得
+  const currentLocation = selectedLocation ? locations.find(loc => loc.id === selectedLocation) : null;
 
   // Mobile overlay
   if (isMobileOpen) {
@@ -295,31 +351,165 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             className={isCollapsed ? "justify-center px-2" : ""}
           />
 
-          {!isCollapsed && <NavTitle label="AI-A計測" />}
+          {/* 拠点管理セクション */}
+          {!isCollapsed && (
+            <>
+              {/* 検索ボックス */}
+              <div className="px-2 py-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="拠点を検索..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
 
-          <NavItem
-            icon={<BarChart3 className="w-4 h-4" />}
-            label={isCollapsed ? "" : "A計測集計"}
-            active={pathname === '/measurements'}
-            href="/measurements"
-            className={isCollapsed ? "justify-center px-2" : ""}
-          />
+              {/* お気に入り拠点 */}
+              <NavItem
+                icon={<Star className="w-4 h-4" />}
+                label="お気に入り拠点"
+                hasChildren={true}
+                isExpanded={expandedSections.includes('favorites')}
+                onToggleExpand={() => toggleSection('favorites')}
+              />
+              
+              {expandedSections.includes('favorites') && (
+                <div className="ml-4 space-y-1">
+                  {favoriteLocations.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-gray-500">
+                      お気に入りなし
+                    </div>
+                  ) : (
+                    favoriteLocations.map(location => (
+                      <div key={location.id} className="flex items-center justify-between pr-2 group">
+                        <button
+                          onClick={() => handleLocationClick(location.id)}
+                          className="flex-1 flex items-center px-2 py-1.5 text-sm text-gray-700 rounded hover:bg-gray-100"
+                        >
+                          <MapPin className="w-3 h-3 mr-2 text-gray-400" />
+                          <span className="truncate">{location.tunnelName}</span>
+                          {location.alertLevel === 'danger' && (
+                            <AlertTriangle className="w-3 h-3 ml-1 text-rose-500" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => toggleFavorite(location.id)}
+                          className="p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
 
-          <NavItem
-            icon={<Brain className="w-4 h-4" />}
-            label={isCollapsed ? "" : "予測モデル作成"}
-            active={pathname === '/learning'}
-            href="/learning"
-            className={isCollapsed ? "justify-center px-2" : ""}
-          />
+              {/* 全拠点 */}
+              <NavItem
+                icon={<MapPin className="w-4 h-4" />}
+                label="全拠点"
+                hasChildren={true}
+                isExpanded={expandedSections.includes('locations')}
+                onToggleExpand={() => toggleSection('locations')}
+              />
+              
+              {expandedSections.includes('locations') && (
+                <div className="ml-4 space-y-1 max-h-64 overflow-y-auto">
+                  {(searchQuery ? filteredLocations : locations).map(location => (
+                    <div key={location.id} className="flex items-center justify-between pr-2 group">
+                      <button
+                        onClick={() => handleLocationClick(location.id)}
+                        className="flex-1 flex items-center px-2 py-1.5 text-sm text-gray-700 rounded hover:bg-gray-100"
+                      >
+                        <MapPin className="w-3 h-3 mr-2 text-gray-400" />
+                        <span className="truncate">{location.tunnelName}</span>
+                        {location.alertLevel === 'danger' && (
+                          <AlertTriangle className="w-3 h-3 ml-1 text-rose-500" />
+                        )}
+                        {location.status === 'active' && (
+                          <div className="w-2 h-2 ml-1 bg-green-500 rounded-full animate-pulse" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => toggleFavorite(location.id)}
+                        className="p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Star className={cn(
+                          "w-3 h-3",
+                          isFavorite(location.id) ? "text-amber-500 fill-amber-500" : "text-gray-400"
+                        )} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-          <NavItem
-            icon={<Activity className="w-4 h-4" />}
-            label={isCollapsed ? "" : "最終変位・沈下予測"}
-            active={pathname === '/simulation'}
-            href="/simulation"
-            className={isCollapsed ? "justify-center px-2" : ""}
-          />
+            </>
+          )}
+
+          {/* AI-A計測集計セクション */}
+          {!isCollapsed && (
+            <>
+              <NavTitle label="AI-A計測集計" />
+              
+              {/* 選択中の拠点表示 */}
+              {currentLocation && (
+                <div className="mx-2 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <MapPin className="w-3 h-3 mr-1 text-blue-600" />
+                      <span className="text-xs font-medium text-blue-900 truncate">
+                        {currentLocation.tunnelName}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedLocation(null)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <NavItem
+                icon={<Activity className="w-4 h-4" />}
+                label="AI-A計測集計"
+                hasChildren={true}
+                isExpanded={expandedSections.includes('ai-measure')}
+                onToggleExpand={() => toggleSection('ai-measure')}
+              />
+              
+              {expandedSections.includes('ai-measure') && (
+                <div className="ml-4 space-y-1">
+                  <SubNavItem
+                    icon={<BarChart3 className="w-4 h-4" />}
+                    label="A計測集計"
+                    active={pathname === '/measurements'}
+                    href={currentLocation ? `/measurements?location=${currentLocation.id}` : '/measurements'}
+                  />
+                  
+                  <SubNavItem
+                    icon={<Activity className="w-4 h-4" />}
+                    label="最終変位・沈下予測"
+                    active={pathname === '/simulation'}
+                    href={currentLocation ? `/simulation?location=${currentLocation.id}` : '/simulation'}
+                  />
+                  
+                  <SubNavItem
+                    icon={<Brain className="w-4 h-4" />}
+                    label="予測モデル作成"
+                    active={pathname === '/learning'}
+                    href={currentLocation ? `/learning?location=${currentLocation.id}` : '/learning'}
+                  />
+                </div>
+              )}
+            </>
+          )}
 
           {!isCollapsed && <NavTitle label="その他" />}
 

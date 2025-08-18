@@ -27,6 +27,10 @@ const nextConfig = {
           ? 'http://localhost:8001/:path*'
           : 'http://auth:8000/:path*',
       },
+      {
+        source: '/measurements/:path*',
+        destination: 'http://localhost:8000/api/v1/measurements/:path*',
+      },
     ];
   },
 };
