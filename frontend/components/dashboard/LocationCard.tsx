@@ -66,7 +66,7 @@ export function LocationCard({ location, onSelect }: LocationCardProps) {
     <Card 
       className="bg-white border border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all duration-200 overflow-hidden cursor-pointer"
       onClick={handleViewDashboard}>
-      <CardHeader className="pb-4 bg-white border-b border-gray-100">
+      <CardHeader className="pb-4 bg-white">
         <div className="flex justify-between items-start mb-2">
           <div className="flex items-center gap-2">
             <MapPin className="h-5 w-5 text-blue-600" />
@@ -144,7 +144,8 @@ export function LocationCard({ location, onSelect }: LocationCardProps) {
               variant="outline"
               size="sm"
               className="text-xs"
-              disabled={location.status === 'planning'}
+              disabled={!location.availableFeatures?.measurement}
+              title={!location.availableFeatures?.measurement ? "この拠点では利用できません" : ""}
             >
               A計測
             </Button>
@@ -156,7 +157,8 @@ export function LocationCard({ location, onSelect }: LocationCardProps) {
               variant="outline"
               size="sm"
               className="text-xs"
-              disabled={location.status === 'planning'}
+              disabled={!location.availableFeatures?.simulation}
+              title={!location.availableFeatures?.simulation ? "この拠点では利用できません" : ""}
             >
               最終予測
             </Button>
@@ -168,7 +170,8 @@ export function LocationCard({ location, onSelect }: LocationCardProps) {
               variant="outline"
               size="sm"
               className="text-xs"
-              disabled={location.status === 'planning'}
+              disabled={!location.availableFeatures?.modelCreation}
+              title={!location.availableFeatures?.modelCreation ? "この拠点では利用できません" : ""}
             >
               モデル作成
             </Button>

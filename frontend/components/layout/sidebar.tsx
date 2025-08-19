@@ -23,7 +23,8 @@ import {
   MapPin,
   Star,
   Search,
-  AlertTriangle
+  AlertTriangle,
+  Monitor
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -451,14 +452,17 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             </>
           )}
 
-          {/* AI-A計測集計セクション */}
-          {!isCollapsed && (
+          {/* 拠点個別機能セクション - 拠点に基づいて動的に表示 */}
+          {!isCollapsed && currentLocation?.availableFeatures?.aiMeasurement && (
             <>
-              <NavTitle label="AI-A計測集計" />
+              <NavTitle label="拠点個別機能" />
               
               {/* 選択中の拠点表示 */}
               {currentLocation && (
-                <div className="mx-2 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                <div 
+                  className="mx-2 mb-2 p-2 bg-slate-50 border border-slate-200 rounded-md cursor-pointer hover:bg-slate-100 transition-colors"
+                  onClick={() => handleLocationClick(currentLocation.id)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <MapPin className="w-3 h-3 mr-1 text-blue-600" />
@@ -467,7 +471,10 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                       </span>
                     </div>
                     <button
-                      onClick={() => setSelectedLocation(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedLocation(null);
+                      }}
                       className="text-blue-600 hover:text-blue-800"
                     >
                       <X className="w-3 h-3" />
@@ -486,27 +493,60 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               
               {expandedSections.includes('ai-measure') && (
                 <div className="ml-4 space-y-1">
-                  <SubNavItem
-                    icon={<BarChart3 className="w-4 h-4" />}
-                    label="A計測集計"
-                    active={pathname === '/measurements'}
-                    href={currentLocation ? `/measurements?location=${currentLocation.id}` : '/measurements'}
-                  />
+                  {currentLocation?.availableFeatures?.measurement && (
+                    <SubNavItem
+                      icon={<BarChart3 className="w-4 h-4" />}
+                      label="A計測集計"
+                      active={pathname === '/measurements'}
+                      href={currentLocation ? `/measurements?location=${currentLocation.id}` : '/measurements'}
+                    />
+                  )}
                   
-                  <SubNavItem
-                    icon={<Activity className="w-4 h-4" />}
-                    label="最終変位・沈下予測"
-                    active={pathname === '/simulation'}
-                    href={currentLocation ? `/simulation?location=${currentLocation.id}` : '/simulation'}
-                  />
+                  {currentLocation?.availableFeatures?.simulation && (
+                    <SubNavItem
+                      icon={<Activity className="w-4 h-4" />}
+                      label="最終変位・沈下予測"
+                      active={pathname === '/simulation'}
+                      href={currentLocation ? `/simulation?location=${currentLocation.id}` : '/simulation'}
+                    />
+                  )}
                   
-                  <SubNavItem
-                    icon={<Brain className="w-4 h-4" />}
-                    label="予測モデル作成"
-                    active={pathname === '/learning'}
-                    href={currentLocation ? `/learning?location=${currentLocation.id}` : '/learning'}
-                  />
+                  {currentLocation?.availableFeatures?.modelCreation && (
+                    <SubNavItem
+                      icon={<Brain className="w-4 h-4" />}
+                      label="予測モデル作成"
+                      active={pathname === '/learning'}
+                      href={currentLocation ? `/learning?location=${currentLocation.id}` : '/learning'}
+                    />
+                  )}
                 </div>
+              )}
+            </>
+          )}
+          
+          {/* 拠点が選択されていない場合のメッセージ */}
+          {!isCollapsed && !currentLocation && (
+            <div className="mx-2 mb-2 p-3 bg-white border border-gray-200 rounded-md">
+              <p className="text-xs text-gray-600 text-center">
+                拠点を選択すると<br />利用可能な機能が表示されます
+              </p>
+            </div>
+          )}
+
+          {/* 追加機能セクション - 拠点に基づいて動的に表示 */}
+          {!isCollapsed && currentLocation && (
+            currentLocation.availableFeatures.realTimeMonitoring
+          ) && (
+            <>
+              <NavTitle label="追加機能" />
+              
+              {currentLocation.availableFeatures.realTimeMonitoring && (
+                <NavItem
+                  icon={<Monitor className="w-4 h-4" />}
+                  label="リアルタイム監視"
+                  active={pathname === '/monitoring'}
+                  href={`/monitoring?location=${currentLocation.id}`}
+                />
               )}
             </>
           )}

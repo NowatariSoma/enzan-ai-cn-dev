@@ -150,7 +150,7 @@ export default function LocationDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Sidebar 
         isMobileOpen={isMobileSidebarOpen}
         onMobileClose={handleMobileSidebarClose}
@@ -159,7 +159,7 @@ export default function LocationDashboard() {
       <div className="flex flex-col min-h-screen md:pl-64">
         <Header onMobileSidebarToggle={handleMobileSidebarToggle} />
         
-        <main className="flex-1 w-full px-4 py-6">
+        <main className="flex-1 w-full px-4 py-6 bg-white">
           <div className="max-w-7xl mx-auto">
             {/* ヘッダー */}
             <div className="mb-6">
@@ -211,65 +211,73 @@ export default function LocationDashboard() {
               </div>
             </div>
 
-            {/* AI-A計測アクションカード */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <Card className="bg-white hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-500"
-                    onClick={() => router.push(`/measurements?location=${location.id}`)}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <BarChart3 className="h-5 w-5 text-green-600" />
-                    A計測集計
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    詳細な変位・沈下データの分析
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full bg-green-600 hover:bg-green-700">
-                    <Activity className="h-4 w-4 mr-2" />
-                    詳細を見る
-                  </Button>
-                </CardContent>
-              </Card>
+            {/* AI-A計測アクションカード - 利用可能な機能のみ表示 */}
+            {location.availableFeatures.aiMeasurement && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {location.availableFeatures.measurement && (
+                  <Card className="bg-white hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-500"
+                        onClick={() => router.push(`/measurements?location=${location.id}`)}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <BarChart3 className="h-5 w-5 text-green-600" />
+                        A計測集計
+                      </CardTitle>
+                      <CardDescription className="text-sm">
+                        詳細な変位・沈下データの分析
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button className="w-full bg-green-600 hover:bg-green-700">
+                        <Activity className="h-4 w-4 mr-2" />
+                        詳細を見る
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
 
-              <Card className="bg-white hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-500"
-                    onClick={() => router.push(`/simulation?location=${location.id}`)}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Activity className="h-5 w-5 text-blue-600" />
-                    最終変位・沈下予測
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    シミュレーションによる予測分析
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                    <TrendingUp className="h-4 w-4 mr-2" />
-                    予測実行
-                  </Button>
-                </CardContent>
-              </Card>
+                {location.availableFeatures.simulation && (
+                  <Card className="bg-white hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-500"
+                        onClick={() => router.push(`/simulation?location=${location.id}`)}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Activity className="h-5 w-5 text-blue-600" />
+                        最終変位・沈下予測
+                      </CardTitle>
+                      <CardDescription className="text-sm">
+                        シミュレーションによる予測分析
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                        <TrendingUp className="h-4 w-4 mr-2" />
+                        予測実行
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
 
-              <Card className="bg-white hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-500"
-                    onClick={() => router.push(`/learning?location=${location.id}`)}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Brain className="h-5 w-5 text-purple-600" />
-                    予測モデル作成
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    AIによる予測モデルの構築と学習
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full bg-purple-600 hover:bg-purple-700">
-                    <Brain className="h-4 w-4 mr-2" />
-                    モデル作成
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+                {location.availableFeatures.modelCreation && (
+                  <Card className="bg-white hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-500"
+                        onClick={() => router.push(`/learning?location=${location.id}`)}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Brain className="h-5 w-5 text-purple-600" />
+                        予測モデル作成
+                      </CardTitle>
+                      <CardDescription className="text-sm">
+                        AIによる予測モデルの構築と学習
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button className="w-full bg-purple-600 hover:bg-purple-700">
+                        <Brain className="h-4 w-4 mr-2" />
+                        モデル作成
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
 
             {/* メトリクスカード */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

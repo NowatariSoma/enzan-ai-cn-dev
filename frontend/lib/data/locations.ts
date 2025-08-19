@@ -1,5 +1,18 @@
 // 拠点データの定義
 
+// 利用可能な機能の定義
+export interface AvailableFeatures {
+  aiMeasurement: boolean;           // AI-A計測集計
+  measurement: boolean;              // A計測集計
+  simulation: boolean;               // 最終変位・沈下予測  
+  modelCreation: boolean;            // 予測モデル作成
+  realTimeMonitoring?: boolean;      // リアルタイム監視（将来的な機能）
+  riskAnalysis?: boolean;            // リスク分析（将来的な機能）
+  reportGeneration?: boolean;        // レポート生成（将来的な機能）
+  dataExport?: boolean;              // データエクスポート（将来的な機能）
+  [key: string]: boolean | undefined; // 拡張用
+}
+
 export interface Location {
   id: string;
   name: string;
@@ -19,6 +32,7 @@ export interface Location {
     lat: number;
     lng: number;
   };
+  availableFeatures: AvailableFeatures; // 利用可能な機能
 }
 
 export const locations: Location[] = [
@@ -40,6 +54,16 @@ export const locations: Location[] = [
     coordinates: {
       lat: 43.4500,
       lng: 144.0167
+    },
+    availableFeatures: {
+      aiMeasurement: true,
+      measurement: true,
+      simulation: true,
+      modelCreation: true,
+      realTimeMonitoring: true,
+      riskAnalysis: true,
+      reportGeneration: true,
+      dataExport: true
     }
   },
   {
@@ -60,6 +84,14 @@ export const locations: Location[] = [
     coordinates: {
       lat: 42.1083,
       lng: 142.5639
+    },
+    availableFeatures: {
+      aiMeasurement: true,
+      measurement: true,
+      simulation: true,
+      modelCreation: false,  // モデル作成は未対応
+      realTimeMonitoring: true,
+      riskAnalysis: false
     }
   },
   {
@@ -80,6 +112,13 @@ export const locations: Location[] = [
     coordinates: {
       lat: 38.1000,
       lng: 140.5667
+    },
+    availableFeatures: {
+      aiMeasurement: true,
+      measurement: true,
+      simulation: true,
+      modelCreation: true,
+      reportGeneration: true
     }
   },
   {
@@ -100,6 +139,14 @@ export const locations: Location[] = [
     coordinates: {
       lat: 35.2333,
       lng: 139.0167
+    },
+    availableFeatures: {
+      aiMeasurement: true,
+      measurement: true,
+      simulation: true,
+      modelCreation: true,
+      realTimeMonitoring: true,
+      dataExport: true
     }
   },
   {
@@ -120,6 +167,13 @@ export const locations: Location[] = [
     coordinates: {
       lat: 35.3606,
       lng: 138.7274
+    },
+    availableFeatures: {
+      aiMeasurement: true,
+      measurement: true,
+      simulation: false,  // シミュレーション準備中
+      modelCreation: true,
+      riskAnalysis: true
     }
   },
   {
@@ -140,6 +194,14 @@ export const locations: Location[] = [
     coordinates: {
       lat: 34.7333,
       lng: 135.2000
+    },
+    availableFeatures: {
+      aiMeasurement: false,  // 完了済みのため無効
+      measurement: false,
+      simulation: false,
+      modelCreation: false,
+      reportGeneration: true,  // レポート閲覧のみ可能
+      dataExport: true
     }
   },
   {
@@ -160,6 +222,12 @@ export const locations: Location[] = [
     coordinates: {
       lat: 34.6617,
       lng: 133.9350
+    },
+    availableFeatures: {
+      aiMeasurement: false,  // 計画中のため無効
+      measurement: false,
+      simulation: false,
+      modelCreation: false
     }
   },
   {
@@ -180,6 +248,12 @@ export const locations: Location[] = [
     coordinates: {
       lat: 33.5597,
       lng: 133.5311
+    },
+    availableFeatures: {
+      aiMeasurement: true,
+      measurement: true,
+      simulation: true,
+      modelCreation: true
     }
   },
   {
@@ -200,6 +274,14 @@ export const locations: Location[] = [
     coordinates: {
       lat: 32.8847,
       lng: 131.1042
+    },
+    availableFeatures: {
+      aiMeasurement: true,
+      measurement: true,
+      simulation: true,  // 緊急対応モード
+      modelCreation: false,  // リスクが高いため制限
+      realTimeMonitoring: true,
+      riskAnalysis: true
     }
   },
   {
@@ -220,6 +302,13 @@ export const locations: Location[] = [
     coordinates: {
       lat: 26.2167,
       lng: 127.6792
+    },
+    availableFeatures: {
+      aiMeasurement: true,
+      measurement: true,
+      simulation: false,
+      modelCreation: true,
+      reportGeneration: true
     }
   }
 ];
