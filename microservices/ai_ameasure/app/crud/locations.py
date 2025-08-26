@@ -24,12 +24,18 @@ def get_all_features(db: Session) -> List[Feature]:
 def get_available_features(db: Session, location_id: int) -> Dict[str, bool]:
     """拠点で利用可能な機能一覧を取得（フロントエンド形式）"""
     feature_mapping = {
-        'ai_measurement': 'aiMeasurement',
-        'data_analysis': 'measurement',
+        # 新しい機能タイプ
+        'ai_a_measurement': 'aiMeasurement',     # AI-A計測（親機能）
+        'ai_measurement': 'measurement',         # A計測集計
+        'prediction': 'modelCreation',           # 予測モデル作成
+        'simulation': 'simulation',              # 最終変位・沈下予測
+        
+        # 既存の機能タイプ
+        'data_analysis': 'dataAnalysis',
         'reporting': 'reportGeneration',
         'user_management': 'userManagement',
         'location_management': 'locationManagement',
-        'custom': 'simulation',
+        'custom': 'custom',
     }
     
     # すべての機能をfalseで初期化

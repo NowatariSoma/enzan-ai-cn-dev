@@ -43,25 +43,31 @@ export interface Location {
 // バックエンドレスポンス用インターフェース
 export interface LocationAPIResponse {
   id: number;
-  location_id: string;
+  location_id: string | null;
   name: string;
-  description: string;
-  address: string;
-  region: string;
-  prefecture: string;
-  tunnel_name: string;
-  folder_name: string;
+  description: string | null;
+  address: string | null;
+  region: string | null;
+  prefecture: string | null;
+  tunnel_name: string | null;
+  folder_name: string | null;
   status: 'active' | 'monitoring' | 'completed' | 'planning';
-  start_date: string;
-  total_length: number;
-  progress: string; // Decimal field comes as string
+  start_date: string | null;
+  total_length: number | null;
+  progress: number; // Float field
   measurement_count: number;
   alert_level: 'normal' | 'warning' | 'danger';
+  latitude: number | null;
+  longitude: number | null;
   coordinates: {
     lat: number;
     lng: number;
   } | null;
   available_features: AvailableFeatures;
+  lastUpdated: string;
+  user_count: number;
+  feature_count: number;
+  enabled_feature_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -70,20 +76,29 @@ export class LocationsAPI {
   private baseUrl: string;
 
   constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
+    this.baseUrl = baseUrl || 'http://localhost:8000/api/v1';
+    console.log('LocationsAPI initialized with baseUrl:', this.baseUrl);
   }
 
   async getLocations(): Promise<Location[]> {
-    const response = await fetch(`${this.baseUrl}/locations/`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch locations: ${response.statusText}`);
+    console.log('Fetching locations from:', `${this.baseUrl}/locations`);
+    try {
+      const response = await fetch(`${this.baseUrl}/locations`);
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch locations: ${response.status} ${response.statusText}`);
+      }
+      const data: LocationAPIResponse[] = await response.json();
+      console.log('Raw API response:', data);
+      return data.map(this.transformLocationResponse);
+    } catch (error) {
+      console.error('Error in getLocations:', error);
+      throw error;
     }
-    const data: LocationAPIResponse[] = await response.json();
-    return data.map(this.transformLocationResponse);
   }
 
   async getLocation(id: string): Promise<Location> {
-    const response = await fetch(`${this.baseUrl}/locations/${id}/`);
+    const response = await fetch(`${this.baseUrl}/locations/${id}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch location: ${response.statusText}`);
     }
@@ -94,7 +109,7 @@ export class LocationsAPI {
   // バックエンドのレスポンスをフロントエンド用の形式に変換
   private transformLocationResponse(apiResponse: LocationAPIResponse): Location {
     return {
-      id: apiResponse.location_id, // フロントエンド用のIDはlocation_idを使用
+      id: apiResponse.location_id || apiResponse.id.toString(), // フロントエンド用のIDはlocation_idを使用、なければid
       location_id: apiResponse.location_id,
       name: apiResponse.name,
       region: apiResponse.region || '',
@@ -105,8 +120,8 @@ export class LocationsAPI {
       status: apiResponse.status,
       startDate: apiResponse.start_date || '',
       totalLength: apiResponse.total_length || 0,
-      progress: parseFloat(apiResponse.progress) || 0,
-      lastUpdated: apiResponse.updated_at,
+      progress: apiResponse.progress || 0,
+      lastUpdated: apiResponse.lastUpdated || apiResponse.updated_at,
       measurementCount: apiResponse.measurement_count || 0,
       alertLevel: apiResponse.alert_level,
       coordinates: apiResponse.coordinates,

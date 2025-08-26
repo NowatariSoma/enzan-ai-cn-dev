@@ -11,7 +11,13 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # CORS設定
-    BACKEND_CORS_ORIGINS: list[str] = ["*"]  # 開発環境のため全てのオリジンを許可
+    BACKEND_CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3005", 
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3005",
+        "*"
+    ]  # 開発環境のため全てのオリジンを許可
 
     # データベース設定（Django管理者画面のMySQLと同じ）
     MYSQL_ENGINE: str = os.getenv("MYSQL_ENGINE", "mysql")

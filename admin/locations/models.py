@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 User = get_user_model()
@@ -9,7 +11,10 @@ User = get_user_model()
 class Feature(models.Model):
     """機能マスター"""
     FEATURE_TYPES = [
+        ('ai_a_measurement', 'AI-A計測'),  # 親機能
         ('ai_measurement', 'AI計測集計'),
+        ('prediction', '予測モデル作成'),
+        ('simulation', '最終変位・沈下予測'),
         ('data_analysis', 'データ分析'),
         ('reporting', 'レポート機能'),
         ('user_management', 'ユーザー管理'),
@@ -19,19 +24,41 @@ class Feature(models.Model):
     
     name = models.CharField(_("機能名"), max_length=255, unique=True)
     feature_type = models.CharField(_("機能タイプ"), max_length=50, choices=FEATURE_TYPES)
+    parent_feature = models.ForeignKey(
+        'self', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='child_features',
+        verbose_name=_("親機能"),
+        help_text=_("この機能の親機能（指定した場合、親機能が有効になると自動で有効になります）")
+    )
     description = models.TextField(_("説明"), blank=True, null=True)
     is_active = models.BooleanField(_("利用可能"), default=True)
+    display_order = models.IntegerField(_("表示順"), default=0, help_text="表示順序（小さい値が先に表示）")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
+        if self.parent_feature:
+            return f"{self.parent_feature.name} > {self.name}"
         return self.name
+
+    @property
+    def is_parent(self):
+        """親機能かどうか"""
+        return self.child_features.exists()
+    
+    @property
+    def is_child(self):
+        """子機能かどうか"""
+        return self.parent_feature is not None
 
     class Meta:
         verbose_name = _("機能")
         verbose_name_plural = _("機能")
-        ordering = ['feature_type', 'name']
+        ordering = ['display_order', 'id']
 
 
 class Location(models.Model):
@@ -115,3 +142,36 @@ class LocationFeature(models.Model):
         verbose_name = _("拠点機能設定")
         verbose_name_plural = _("拠点機能設定")
         unique_together = ['location', 'feature']
+
+
+@receiver(post_save, sender=LocationFeature)
+def handle_parent_feature_activation(sender, instance, created, **kwargs):
+    """
+    親機能が有効になった場合、子機能も自動で有効にする
+    """
+    if instance.is_enabled and instance.feature.is_parent:
+        # 親機能が有効化された場合、子機能も自動で有効にする
+        child_features = instance.feature.child_features.filter(is_active=True)
+        
+        for child_feature in child_features:
+            child_location_feature, created = LocationFeature.objects.get_or_create(
+                location=instance.location,
+                feature=child_feature,
+                defaults={'is_enabled': True}
+            )
+            if not created and not child_location_feature.is_enabled:
+                child_location_feature.is_enabled = True
+                child_location_feature.save()
+                
+        print(f"親機能 '{instance.feature.name}' が有効化されました。{child_features.count()}個の子機能も有効になりました。")
+    
+    elif not instance.is_enabled and instance.feature.is_parent:
+        # 親機能が無効化された場合、子機能も無効にする
+        child_features = instance.feature.child_features.all()
+        LocationFeature.objects.filter(
+            location=instance.location,
+            feature__in=child_features,
+            is_enabled=True
+        ).update(is_enabled=False)
+        
+        print(f"親機能 '{instance.feature.name}' が無効化されました。{child_features.count()}個の子機能も無効になりました。")

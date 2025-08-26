@@ -38,8 +38,8 @@ app = FastAPI(
 # CORS設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],  # 開発環境で全許可
+    allow_credentials=False,  # *を使う場合はcredentialsをFalseにする必要がある
     allow_methods=["*"],
     allow_headers=["*"],
 )
