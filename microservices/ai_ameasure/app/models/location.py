@@ -1,5 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Text, Boolean
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, Integer, String, DateTime, Float, Text, Boolean, JSON, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -22,7 +21,7 @@ class Location(Base):
     status = Column(String(20), nullable=True, default='planning')
     start_date = Column(DateTime, nullable=True)
     total_length = Column(Float, nullable=True)
-    progress = Column(Integer, nullable=True, default=0)
+    progress = Column(Numeric(5, 2), nullable=True, default=0.0)
     measurement_count = Column(Integer, nullable=True, default=0)
     alert_level = Column(String(20), nullable=True, default='safe')
     latitude = Column(Float, nullable=True)
@@ -56,6 +55,6 @@ class LocationFeature(Base):
     location_id = Column(Integer, nullable=False)
     feature_id = Column(Integer, nullable=False)
     is_enabled = Column(Boolean, nullable=False, default=True)
-    settings = Column(JSONB, nullable=True)
+    settings = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

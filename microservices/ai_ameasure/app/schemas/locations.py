@@ -15,7 +15,7 @@ class LocationBase(BaseModel):
     status: Optional[str] = "planning"
     start_date: Optional[datetime] = None
     total_length: Optional[float] = None
-    progress: Optional[int] = 0
+    progress: Optional[float] = 0.0
     measurement_count: Optional[int] = 0
     alert_level: Optional[str] = "safe"
     latitude: Optional[float] = None

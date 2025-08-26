@@ -13,17 +13,17 @@ class Settings(BaseSettings):
     # CORS設定
     BACKEND_CORS_ORIGINS: list[str] = ["*"]  # 開発環境のため全てのオリジンを許可
 
-    # データベース設定（DjangoのDBと同じ）
-    POSTGRES_ENGINE: str = os.getenv("POSTGRES_ENGINE", "postgresql")
-    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "mlp_db")
-    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "root")
-    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "postgres_pass")
-    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
-    POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
+    # データベース設定（Django管理者画面のMySQLと同じ）
+    MYSQL_ENGINE: str = os.getenv("MYSQL_ENGINE", "mysql")
+    MYSQL_DB: str = os.getenv("MYSQL_DB", "mlp_db")
+    MYSQL_USER: str = os.getenv("MYSQL_USER", "root")
+    MYSQL_PASSWORD: str = os.getenv("MYSQL_PASSWORD", "mysql_pass")
+    MYSQL_HOST: str = os.getenv("MYSQL_HOST", "localhost")
+    MYSQL_PORT: str = os.getenv("MYSQL_PORT", "3306")
 
     @property
     def DATABASE_URL(self) -> str:
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}"
 
     # ファイルアップロード設定
     MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB
@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # 計算設定
     DEFAULT_MAX_DISTANCE_FROM_FACE: float = 100.0
     DEFAULT_PREDICTION_TD: int = 500
+
+    # その他の設定
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = True
 
     model_config = {"case_sensitive": True, "env_file": ".env"}
 
