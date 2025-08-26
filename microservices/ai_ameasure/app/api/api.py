@@ -4,6 +4,7 @@ from app.api.endpoints import (
     charts,
     csv_processing,
     displacement,
+    locations,
     measurements,
     models,
     prediction,
@@ -33,3 +34,5 @@ api_router.include_router(csv_processing.router, prefix="/csv", tags=["csv-proce
 api_router.include_router(charts.router, prefix="/charts", tags=["charts", "visualization"])
 
 api_router.include_router(cache_management.router, prefix="/cache", tags=["cache-management"])
+
+api_router.include_router(locations.router, tags=["locations"])

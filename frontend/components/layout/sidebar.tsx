@@ -28,7 +28,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import { locations, getLocationsByRegion } from '@/lib/data/locations';
+import { useLocations } from '@/lib/hooks/useLocations';
+import { getLocationsByRegion } from '@/lib/api/locations';
 import { useFavoriteLocations } from '@/lib/hooks/useFavoriteLocations';
 
 interface SidebarProps {
@@ -149,6 +150,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteLocations();
+  const { locations } = useLocations();
 
   // 初回読み込み時に選択された拠点を復元
   useEffect(() => {

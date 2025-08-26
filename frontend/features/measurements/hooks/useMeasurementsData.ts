@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { measurementsAPI } from '@/lib/api/measurements';
 import type {
   TimeSeriesDataPoint,
@@ -12,6 +13,8 @@ import type {
 } from '@/lib/api/measurements';
 
 export function useMeasurementsData() {
+  const searchParams = useSearchParams();
+  const location = searchParams.get('location') || '01-hokkaido-akan';
   const [displacementData, setDisplacementData] = useState<TimeSeriesDataPoint[]>([]);
   const [settlementData, setSettlementData] = useState<TimeSeriesDataPoint[]>([]);
   const [displacementDistribution, setDisplacementDistribution] = useState<DistributionDataPoint[]>([]);
@@ -168,8 +171,8 @@ export function useMeasurementsData() {
       setError(null);
       
       try {
-        // distance-data APIからデータ取得
-        const distanceRes = await measurementsAPI.getDistanceData('01-hokkaido-akan', 100);
+        // distance-data APIからデータ取得 (URLパラメータのlocationを使用)
+        const distanceRes = await measurementsAPI.getDistanceData(location, 100);
         setDistanceData(distanceRes);
         
         // distance-dataを既存のグラフ形式に変換
@@ -188,14 +191,14 @@ export function useMeasurementsData() {
         
         // 新しい散布図データを取得
         try {
-          // 変位量の散布図データ
-          const convergenceScatter = await measurementsAPI.getScatterPlotData('convergences', '01-hokkaido-akan', 100);
+          // 変位量の散布図データ (URLパラメータのlocationを使用)
+          const convergenceScatter = await measurementsAPI.getScatterPlotData('convergences', location, 100);
           console.log('Convergence scatter data:', convergenceScatter);
           console.log('Sample points:', convergenceScatter.data.slice(0, 5));
           setConvergenceScatterData(convergenceScatter.data);
           
-          // 沈下量の散布図データ
-          const settlementScatter = await measurementsAPI.getScatterPlotData('settlements', '01-hokkaido-akan', 100);
+          // 沈下量の散布図データ (URLパラメータのlocationを使用)
+          const settlementScatter = await measurementsAPI.getScatterPlotData('settlements', location, 100);
           console.log('Settlement scatter data:', settlementScatter);
           setSettlementScatterData(settlementScatter.data);
         } catch (err) {
@@ -222,7 +225,7 @@ export function useMeasurementsData() {
     };
 
     fetchAllData();
-  }, []);
+  }, [location]); // locationが変更されたら再取得
 
 
   return {

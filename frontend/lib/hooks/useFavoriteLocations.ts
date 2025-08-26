@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Location } from '@/lib/data/locations';
+import { Location } from '@/lib/api/locations';
 
 const STORAGE_KEY = 'favorite-locations';
 

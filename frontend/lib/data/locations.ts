@@ -101,7 +101,7 @@ export const locations: Location[] = [
     prefecture: '宮城県',
     tunnelName: '蔵王トンネル',
     description: '東北自動車道バイパス工事',
-    folderName: '03-tohoku-zao',
+    folderName: '01-hokkaido-akan', // データが存在するフォルダを使用
     status: 'monitoring',
     startDate: '2023-09-01',
     totalLength: 3200,

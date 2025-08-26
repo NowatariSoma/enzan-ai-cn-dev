@@ -1,6 +1,6 @@
 // API client for measurements endpoints
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export interface TimeSeriesDataPoint {
   td: number;

@@ -13,6 +13,18 @@ class Settings(BaseSettings):
     # CORS設定
     BACKEND_CORS_ORIGINS: list[str] = ["*"]  # 開発環境のため全てのオリジンを許可
 
+    # データベース設定（DjangoのDBと同じ）
+    POSTGRES_ENGINE: str = os.getenv("POSTGRES_ENGINE", "postgresql")
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "mlp_db")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "root")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "postgres_pass")
+    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
+
+    @property
+    def DATABASE_URL(self) -> str:
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+
     # ファイルアップロード設定
     MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB
     UPLOAD_DIR: Path = Path("/tmp/ai_ameasure_uploads")

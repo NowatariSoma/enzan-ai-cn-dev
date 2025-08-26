@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/forms/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/layout/card';
 import { LocationCard } from '@/components/dashboard/LocationCard';
 import { Badge } from '@/components/ui/data-display/badge';
-import { locations, getLocationsByRegion, getLocationStats, getAlertStats } from '@/lib/data/locations';
+import { useLocations } from '@/lib/hooks/useLocations';
+import { getLocationsByRegion, getLocationStats, getAlertStats } from '@/lib/api/locations';
 import { Activity, Settings, BarChart3, Brain, Home, TrendingUp, MapPin, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 
 interface DashboardCard {
@@ -96,9 +97,11 @@ export default function HomePage() {
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
-  const locationsByRegion = getLocationsByRegion();
-  const locationStats = getLocationStats();
-  const alertStats = getAlertStats();
+  const { locations, loading, error } = useLocations();
+
+  const locationsByRegion = getLocationsByRegion(locations);
+  const locationStats = getLocationStats(locations);
+  const alertStats = getAlertStats(locations);
 
   const handleMobileSidebarToggle = () => {
     setIsMobileSidebarOpen(!isMobileSidebarOpen);
@@ -122,6 +125,59 @@ export default function HomePage() {
     const statusMatch = selectedStatus === 'all' || location.status === selectedStatus;
     return regionMatch && statusMatch;
   });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white">
+        <Sidebar 
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileClose={handleMobileSidebarClose}
+        />
+        
+        <div className="flex flex-col min-h-screen md:pl-64">
+          <Header onMobileSidebarToggle={handleMobileSidebarToggle} />
+          
+          <main className="flex-1 w-full px-4 py-8 bg-white">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+                  <p className="text-gray-600">拠点データを読み込み中...</p>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white">
+        <Sidebar 
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileClose={handleMobileSidebarClose}
+        />
+        
+        <div className="flex flex-col min-h-screen md:pl-64">
+          <Header onMobileSidebarToggle={handleMobileSidebarToggle} />
+          
+          <main className="flex-1 w-full px-4 py-8 bg-white">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <AlertTriangle className="h-8 w-8 text-red-600 mx-auto mb-4" />
+                  <p className="text-red-600 mb-2">拠点データの読み込みに失敗しました</p>
+                  <p className="text-gray-500 text-sm">モックデータで表示しています</p>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-white">

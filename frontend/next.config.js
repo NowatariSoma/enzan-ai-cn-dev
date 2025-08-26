@@ -28,8 +28,10 @@ const nextConfig = {
           : 'http://auth:8000/:path*',
       },
       {
-        source: '/measurements/:path*',
-        destination: 'http://localhost:8000/api/v1/measurements/:path*',
+        source: '/api/v1/:path*',
+        destination: isDev 
+          ? 'http://localhost:8000/api/v1/:path*'
+          : 'http://ai_ameasure:8000/api/v1/:path*',
       },
     ];
   },

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/forms/button';
 import { Progress } from '@/components/ui/data-display/progress';
 import { Badge } from '@/components/ui/data-display/badge';
-import { Location } from '@/lib/data/locations';
+import { Location } from '@/lib/api/locations';
 import { MapPin, Activity, AlertTriangle, Calendar, TrendingUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 

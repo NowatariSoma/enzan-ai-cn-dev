@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/forms/button';
 import { Badge } from '@/components/ui/data-display/badge';
 import { Progress } from '@/components/ui/data-display/progress';
-import { getLocationById } from '@/lib/data/locations';
+import { useLocation } from '@/lib/hooks/useLocations';
 import { 
   Activity, 
   BarChart3, 
@@ -50,7 +50,7 @@ export default function LocationDashboard() {
   const params = useParams();
   const router = useRouter();
   const locationId = params.id as string;
-  const location = getLocationById(locationId);
+  const { location, loading, error } = useLocation(locationId);
   
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [timeRange, setTimeRange] = useState('7d'); // 7d, 30d, 90d, all
@@ -61,7 +61,18 @@ export default function LocationDashboard() {
     }
   }, [location]);
 
-  if (!location) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600">拠点データを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !location) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">

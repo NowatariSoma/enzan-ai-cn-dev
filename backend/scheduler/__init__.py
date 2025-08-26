@@ -1,1 +1,0 @@
-# Scheduler app for automated data sync 
