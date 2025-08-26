@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { simulationApi, LocalDisplacementResponse } from '../services/simulationApi';
 
 export function useSimulation() {
+  const searchParams = useSearchParams();
+  const locationParam = searchParams?.get('location');
+  
   const [folders, setFolders] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('');
   const [measurementFiles, setMeasurementFiles] = useState<string[]>([]);
@@ -23,17 +27,27 @@ export function useSimulation() {
       try {
         const response = await simulationApi.getFolders();
         setFolders(response.folders);
-        // Set first folder as default
+        
+        // Set default selected folder - prefer location parameter if valid
         if (response.folders.length > 0) {
-          setSelectedFolder(response.folders[0]);
+          let folderToSelect = response.folders[0]; // Default fallback
+          
+          if (locationParam && response.folders.includes(locationParam)) {
+            folderToSelect = locationParam;
+          } else if (locationParam) {
+            setError(`指定されたフォルダ '${locationParam}' が見つかりません。利用可能なフォルダから選択してください。`);
+          }
+          
+          setSelectedFolder(folderToSelect);
+          console.log('Selected folder:', folderToSelect); // Debug log
         }
       } catch (err) {
         console.error('Failed to load folders:', err);
-        setError('フォルダの読み込みに失敗しました');
+        setError('フォルダの読み込みに失敗しました。APIサーバーとの接続を確認してください。');
       }
     };
     loadFolders();
-  }, []);
+  }, [locationParam]);
 
   // Load measurement files when folder changes
   useEffect(() => {
@@ -41,15 +55,21 @@ export function useSimulation() {
     
     const loadMeasurementFiles = async () => {
       try {
+        setError(null); // Clear previous errors
+        console.log('Loading measurement files for folder:', selectedFolder); // Debug log
         const response = await simulationApi.getMeasurementFiles(selectedFolder);
+        console.log('Received measurement files:', response.measurement_files.length); // Debug log
         setMeasurementFiles(response.measurement_files);
         // Set first file as default
         if (response.measurement_files.length > 0) {
           setCycleNumber(response.measurement_files[0]);
+        } else {
+          setError(`フォルダ '${selectedFolder}' に測定ファイルが見つかりません。`);
         }
       } catch (err) {
         console.error('Failed to load measurement files:', err);
-        setError('測定ファイルの読み込みに失敗しました');
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        setError(`測定ファイルの読み込みに失敗しました: ${errorMsg}`);
       }
     };
     loadMeasurementFiles();
@@ -105,7 +125,8 @@ export function useSimulation() {
       
     } catch (err) {
       console.error('Analysis failed:', err);
-      setError(err instanceof Error ? err.message : '解析に失敗しました');
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(`局所変位解析に失敗しました: ${errorMsg}`);
     } finally {
       setIsAnalyzing(false);
     }

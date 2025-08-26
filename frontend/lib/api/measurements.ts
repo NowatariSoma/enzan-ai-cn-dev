@@ -1,6 +1,6 @@
 // API client for measurements endpoints
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export interface TimeSeriesDataPoint {
   td: number;
@@ -103,40 +103,40 @@ export class MeasurementsAPI {
     this.baseUrl = baseUrl;
   }
 
-  async getDisplacementSeries(numPoints: number = 100): Promise<DisplacementSeriesResponse> {
-    const response = await fetch(`${this.baseUrl}/measurements/displacement-series?num_points=${numPoints}`);
+  async getDisplacementSeries(numPoints: number = 100, folderName: string = '01-hokkaido-akan'): Promise<DisplacementSeriesResponse> {
+    const response = await fetch(`${this.baseUrl}/measurements/displacement-series?num_points=${numPoints}&folder_name=${folderName}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch displacement series: ${response.statusText}`);
     }
     return response.json();
   }
 
-  async getSettlementSeries(numPoints: number = 100): Promise<SettlementSeriesResponse> {
-    const response = await fetch(`${this.baseUrl}/measurements/settlement-series?num_points=${numPoints}`);
+  async getSettlementSeries(numPoints: number = 100, folderName: string = '01-hokkaido-akan'): Promise<SettlementSeriesResponse> {
+    const response = await fetch(`${this.baseUrl}/measurements/settlement-series?num_points=${numPoints}&folder_name=${folderName}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch settlement series: ${response.statusText}`);
     }
     return response.json();
   }
 
-  async getDisplacementDistribution(): Promise<DisplacementDistributionResponse> {
-    const response = await fetch(`${this.baseUrl}/measurements/displacement-distribution`);
+  async getDisplacementDistribution(folderName: string = '01-hokkaido-akan'): Promise<DisplacementDistributionResponse> {
+    const response = await fetch(`${this.baseUrl}/measurements/displacement-distribution?folder_name=${folderName}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch displacement distribution: ${response.statusText}`);
     }
     return response.json();
   }
 
-  async getSettlementDistribution(): Promise<SettlementDistributionResponse> {
-    const response = await fetch(`${this.baseUrl}/measurements/settlement-distribution`);
+  async getSettlementDistribution(folderName: string = '01-hokkaido-akan'): Promise<SettlementDistributionResponse> {
+    const response = await fetch(`${this.baseUrl}/measurements/settlement-distribution?folder_name=${folderName}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch settlement distribution: ${response.statusText}`);
     }
     return response.json();
   }
 
-  async getTunnelScatter(numPoints: number = 200): Promise<TunnelScatterResponse> {
-    const response = await fetch(`${this.baseUrl}/measurements/tunnel-scatter?num_points=${numPoints}`);
+  async getTunnelScatter(numPoints: number = 200, folderName: string = '01-hokkaido-akan'): Promise<TunnelScatterResponse> {
+    const response = await fetch(`${this.baseUrl}/measurements/tunnel-scatter?num_points=${numPoints}&folder_name=${folderName}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch tunnel scatter data: ${response.statusText}`);
     }

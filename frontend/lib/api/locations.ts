@@ -106,6 +106,16 @@ export class LocationsAPI {
     return this.transformLocationResponse(data);
   }
 
+  async getLocationByLocationId(locationId: string): Promise<Location | null> {
+    try {
+      const locations = await this.getLocations();
+      return locations.find(loc => loc.location_id === locationId) || null;
+    } catch (error) {
+      console.error('Error fetching location by location_id:', error);
+      return null;
+    }
+  }
+
   // バックエンドのレスポンスをフロントエンド用の形式に変換
   private transformLocationResponse(apiResponse: LocationAPIResponse): Location {
     return {

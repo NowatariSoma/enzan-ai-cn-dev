@@ -1,5 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_V1_PREFIX = '/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export interface LocalDisplacementRequest {
   folder_name: string;
@@ -46,7 +45,7 @@ export interface MeasurementFilesResponse {
 
 export const simulationApi = {
   async getFolders(): Promise<FoldersResponse> {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/simulation/folders`);
+    const response = await fetch(`${API_BASE_URL}/simulation/folders`);
     if (!response.ok) {
       throw new Error(`Failed to fetch folders: ${response.statusText}`);
     }
@@ -54,7 +53,7 @@ export const simulationApi = {
   },
 
   async getMeasurementFiles(folderName: string): Promise<MeasurementFilesResponse> {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/simulation/measurements/${encodeURIComponent(folderName)}`);
+    const response = await fetch(`${API_BASE_URL}/simulation/measurements/${encodeURIComponent(folderName)}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch measurement files: ${response.statusText}`);
     }
@@ -62,7 +61,7 @@ export const simulationApi = {
   },
 
   async analyzeLocalDisplacement(params: LocalDisplacementRequest): Promise<LocalDisplacementResponse> {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/simulation/local-displacement`, {
+    const response = await fetch(`${API_BASE_URL}/simulation/local-displacement`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

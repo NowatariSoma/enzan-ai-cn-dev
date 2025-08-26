@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { locationsAPI } from '@/lib/api/locations';
 import { useHeatmap } from './useHeatmap';
 
 interface ProcessEachResult {
@@ -22,7 +24,9 @@ interface ProcessEachResult {
 }
 
 export function useLearning() {
-  const [folder, setFolder] = useState("01-hokkaido-akan");
+  const searchParams = useSearchParams();
+  const locationParam = searchParams?.get('location');
+  const [folderName, setFolderName] = useState<string>("01-hokkaido-akan");
   const [model, setModel] = useState("Random Forest");
   const [predictionTD, setPredictionTD] = useState(500);
   const [maxDistance, setMaxDistance] = useState(100);
@@ -33,10 +37,18 @@ export function useLearning() {
   // useHeatmapフックを使用
   const { heatmapData, features, fetchHeatmapData } = useHeatmap();
 
+  // locationパラメータを直接フォルダ名として使用
+  useEffect(() => {
+    if (locationParam) {
+      setFolderName(locationParam);
+      console.log('Learning: Using folder name from URL parameter:', locationParam);
+    }
+  }, [locationParam]);
+
   // フォルダが変更されたときにヒートマップデータを取得
   useEffect(() => {
-    fetchHeatmapData(folder, maxDistance);
-  }, [folder, maxDistance, fetchHeatmapData]);
+    fetchHeatmapData(folderName, maxDistance);
+  }, [folderName, maxDistance, fetchHeatmapData]);
 
   // Generate mock data for charts
   const generateChartData = () => {
@@ -136,7 +148,7 @@ export function useLearning() {
     setIsAnalyzing(true);
     console.log('Fetching process-each data with params:', {
       model_name: model,
-      folder_name: folder,
+      folder_name: folderName,
       max_distance_from_face: maxDistance,
       data_type: dataType,
       td: predictionTD,
@@ -144,14 +156,15 @@ export function useLearning() {
     });
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/models/process-each', {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const response = await fetch(`${API_BASE_URL}/models/process-each`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           model_name: model,
-          folder_name: folder,
+          folder_name: folderName,
           max_distance_from_face: maxDistance,
           data_type: dataType,
           td: predictionTD,
@@ -180,7 +193,7 @@ export function useLearning() {
       setProcessEachData(data);
       
       // Also fetch heatmap data
-      fetchHeatmapData(folder, maxDistance);
+      fetchHeatmapData(folderName, maxDistance);
     } catch (error) {
       console.error('Error fetching process-each data:', error);
       // Set error state or show user-friendly error
@@ -188,15 +201,15 @@ export function useLearning() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [model, folder, maxDistance, dataType, predictionTD, fetchHeatmapData]);
+  }, [model, folderName, maxDistance, dataType, predictionTD, fetchHeatmapData]);
 
   const handleAnalyze = () => {
     fetchProcessEachData();
   };
 
   return {
-    folder,
-    setFolder,
+    folderName,
+    setFolderName,
     model,
     setModel,
     dataType,

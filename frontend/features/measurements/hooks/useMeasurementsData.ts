@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { measurementsAPI } from '@/lib/api/measurements';
+import { locationsAPI } from '@/lib/api/locations';
 import type {
   TimeSeriesDataPoint,
   DistributionDataPoint,
@@ -14,7 +15,8 @@ import type {
 
 export function useMeasurementsData() {
   const searchParams = useSearchParams();
-  const location = searchParams.get('location') || '01-hokkaido-akan';
+  const locationParam = searchParams?.get('location');
+  const [folderName, setFolderName] = useState<string>('01-hokkaido-akan');
   const [displacementData, setDisplacementData] = useState<TimeSeriesDataPoint[]>([]);
   const [settlementData, setSettlementData] = useState<TimeSeriesDataPoint[]>([]);
   const [displacementDistribution, setDisplacementDistribution] = useState<DistributionDataPoint[]>([]);
@@ -165,14 +167,23 @@ export function useMeasurementsData() {
     return result;
   };
 
+  // locationパラメータを直接フォルダ名として使用
+  useEffect(() => {
+    if (locationParam) {
+      setFolderName(locationParam);
+      console.log('Measurements: Using folder name from URL parameter:', locationParam);
+    }
+  }, [locationParam]);
+
   useEffect(() => {
     const fetchAllData = async () => {
       setLoading(true);
       setError(null);
       
       try {
-        // distance-data APIからデータ取得 (URLパラメータのlocationを使用)
-        const distanceRes = await measurementsAPI.getDistanceData(location, 100);
+
+        // distance-data APIからデータ取得
+        const distanceRes = await measurementsAPI.getDistanceData(folderName, 100);
         setDistanceData(distanceRes);
         
         // distance-dataを既存のグラフ形式に変換
@@ -191,14 +202,14 @@ export function useMeasurementsData() {
         
         // 新しい散布図データを取得
         try {
-          // 変位量の散布図データ (URLパラメータのlocationを使用)
-          const convergenceScatter = await measurementsAPI.getScatterPlotData('convergences', location, 100);
+          // 変位量の散布図データ
+          const convergenceScatter = await measurementsAPI.getScatterPlotData('convergences', folderName, 100);
           console.log('Convergence scatter data:', convergenceScatter);
           console.log('Sample points:', convergenceScatter.data.slice(0, 5));
           setConvergenceScatterData(convergenceScatter.data);
           
-          // 沈下量の散布図データ (URLパラメータのlocationを使用)
-          const settlementScatter = await measurementsAPI.getScatterPlotData('settlements', location, 100);
+          // 沈下量の散布図データ
+          const settlementScatter = await measurementsAPI.getScatterPlotData('settlements', folderName, 100);
           console.log('Settlement scatter data:', settlementScatter);
           setSettlementScatterData(settlementScatter.data);
         } catch (err) {
@@ -209,7 +220,7 @@ export function useMeasurementsData() {
         
         // 従来のScatter データも取得（互換性のため）
         try {
-          const scatterRes = await measurementsAPI.getTunnelScatter(800);
+          const scatterRes = await measurementsAPI.getTunnelScatter(800, folderName);
           setScatterData(scatterRes.data);
         } catch (err) {
           // APIが未実装の場合はダミーデータを設定
@@ -225,7 +236,7 @@ export function useMeasurementsData() {
     };
 
     fetchAllData();
-  }, [location]); // locationが変更されたら再取得
+  }, [folderName]); // folderNameが変更されたら再取得
 
 
   return {
@@ -237,6 +248,7 @@ export function useMeasurementsData() {
     convergenceScatterData,
     settlementScatterData,
     distanceData,
+    folderName,
     loading,
     error
   };

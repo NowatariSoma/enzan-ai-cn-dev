@@ -13,8 +13,10 @@ class Settings(BaseSettings):
     # CORS設定
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
+        "http://localhost:3004",
         "http://localhost:3005", 
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3004",
         "http://127.0.0.1:3005",
         "*"
     ]  # 開発環境のため全てのオリジンを許可
@@ -36,8 +38,8 @@ class Settings(BaseSettings):
     UPLOAD_DIR: Path = Path("/tmp/ai_ameasure_uploads")
 
     # データフォルダ設定（環境変数でオーバーライド可能）
-    DATA_FOLDER: Path = Path(os.getenv("DATA_FOLDER", "/app/data"))
-    OUTPUT_FOLDER: Path = Path(os.getenv("OUTPUT_FOLDER", "/app/output"))
+    DATA_FOLDER: Path = Path(os.getenv("DATA_FOLDER", "/home/nowatari/repos/enzan-ai-cn-dev/data_folder"))
+    OUTPUT_FOLDER: Path = Path(os.getenv("OUTPUT_FOLDER", "/home/nowatari/repos/enzan-ai-cn-dev/output"))
 
     # モデル設定
     MODELS_DIR: Path = (

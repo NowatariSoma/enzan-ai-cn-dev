@@ -20,8 +20,7 @@ import { Calculator, TrendingUp, Activity } from "lucide-react";
 
 export function LearningDashboard() {
   const {
-    folder,
-    setFolder,
+    folderName,
     model,
     setModel,
     dataType,
@@ -77,21 +76,6 @@ export function LearningDashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="folder-select" className="text-sm font-medium text-gray-700">
-                Select Folder
-              </Label>
-              <Select value={folder} onValueChange={setFolder}>
-                <SelectTrigger id="folder-select" className="w-full">
-                  <SelectValue placeholder="フォルダを選択してください" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="01-hokkaido-akan">01-hokkaido-akan</SelectItem>
-                  <SelectItem value="02-tokyo-metro">02-tokyo-metro</SelectItem>
-                  <SelectItem value="03-osaka-tunnel">03-osaka-tunnel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
             <div className="space-y-2">
               <Label htmlFor="model-select" className="text-sm font-medium text-gray-700">

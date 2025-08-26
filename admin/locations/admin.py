@@ -106,9 +106,7 @@ class LocationAdmin(admin.ModelAdmin):
     
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = list(self.readonly_fields)
-        # 編集時はlocation_idを読み取り専用にする（重複を避けるため）
-        if obj:
-            readonly_fields.append('location_id')
+        # location_idは編集可能にする
         return readonly_fields
 
 

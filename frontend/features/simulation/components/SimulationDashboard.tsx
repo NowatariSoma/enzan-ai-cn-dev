@@ -62,41 +62,29 @@ export function SimulationDashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* Folder Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="folder-select" className="text-sm font-medium text-gray-700">
-                フォルダ選択
-              </Label>
-              <Select value={selectedFolder} onValueChange={setSelectedFolder}>
-                <SelectTrigger id="folder-select" className="w-full">
-                  <SelectValue placeholder="フォルダを選択してください" />
-                </SelectTrigger>
-                <SelectContent>
-                  {folders.map(folder => (
-                    <SelectItem key={folder} value={folder}>
-                      {folder}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
             {/* Parameters Row */}
             <div className="flex flex-row gap-6">
               <div className="flex-1 space-y-2">
                 <Label htmlFor="cycle-select" className="text-sm font-medium text-gray-700">
-                  測定ファイル選択
+                  測定ファイル選択 ({measurementFiles.length}件)
                 </Label>
                 <Select value={cycleNumber} onValueChange={setCycleNumber}>
                   <SelectTrigger id="cycle-select" className="w-full">
                     <SelectValue placeholder="測定ファイルを選択してください" />
                   </SelectTrigger>
                   <SelectContent>
-                    {measurementFiles.map(file => (
-                      <SelectItem key={file} value={file}>
-                        {file}
+                    {measurementFiles.length > 0 ? (
+                      measurementFiles.map(file => (
+                        <SelectItem key={file} value={file}>
+                          {file}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="loading" disabled>
+                        測定ファイルを読み込み中...
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
               </div>
