@@ -15,8 +15,12 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+import pymysql
 import requests
 from dotenv import load_dotenv
+
+# Configure PyMySQL to work with Django
+pymysql.install_as_MySQLdb()
 
 load_dotenv()
 
@@ -93,20 +97,20 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": os.environ.get("POSTGRES_ENGINE", "django.db.backends.postgresql"),
-        "NAME": os.environ.get("POSTGRES_DB", "mlp_db"),
-        "USER": os.environ.get("POSTGRES_USER", "root"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres_pass"),
-        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        "ENGINE": os.environ.get("MYSQL_ENGINE", "django.db.backends.mysql"),
+        "NAME": os.environ.get("MYSQL_DB", "mlp_db"),
+        "USER": os.environ.get("MYSQL_USER", "root"),
+        "PASSWORD": os.environ.get("MYSQL_PASSWORD", "mysql_pass"),
+        "HOST": os.environ.get("MYSQL_HOST", "localhost"),
+        "PORT": os.environ.get("MYSQL_PORT", "3306"),
     },
     "test": {
-        "ENGINE": os.environ.get("POSTGRES_ENGINE", "django.db.backends.postgresql"),
-        "NAME": os.environ.get("POSTGRES_TEST_DB", "mlp_test_db"),
-        "USER": os.environ.get("POSTGRES_USER", "root"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres_pass"),
-        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        "ENGINE": os.environ.get("MYSQL_ENGINE", "django.db.backends.mysql"),
+        "NAME": os.environ.get("MYSQL_TEST_DB", "mlp_test_db"),
+        "USER": os.environ.get("MYSQL_USER", "root"),
+        "PASSWORD": os.environ.get("MYSQL_PASSWORD", "mysql_pass"),
+        "HOST": os.environ.get("MYSQL_HOST", "localhost"),
+        "PORT": os.environ.get("MYSQL_PORT", "3306"),
     }
 }
 

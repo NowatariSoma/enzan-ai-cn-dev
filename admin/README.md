@@ -4,55 +4,47 @@
 
 管理者画面のバックエンドAPI。Djangoで構築されたREST APIサーバー。
 
-## Development Setup
+## Quick Start
 
-### Prerequisites
-
-- Python 3.10以上
-- Poetry 2.0以上
-
-### Install Dependencies
-
+### 1. 依存関係のインストール
 ```bash
 poetry install
 ```
 
-### Environment Setup
-
-1. Create `.env` file:
+### 2. データベース起動
 ```bash
-cp .env.example .env
+# MySQL 8.0コンテナを起動
+docker-compose up -d db
 ```
 
-2. Configure environment variables in `.env`
-
-### Database Setup
-
+### 3. データベース設定
 ```bash
-# Run migrations
+# マイグレーション実行
 poetry run python manage.py migrate
 
-# Create superuser
+# 管理者ユーザー作成
 poetry run python manage.py create_superuser
+# Username: admin, Password: admin123456
 
-# Seed initial data
+# 初期データ投入
 poetry run python manage.py seed_locations
 poetry run python manage.py seed_features
 ```
 
-### Development Server
-
+### 4. 開発サーバー起動
 ```bash
-# Using custom run script (defaults to port 8080)
+# デフォルトで8080番ポートで起動
 poetry run python run.py runserver
-
-# Or manually specify port 8080
-poetry run python manage.py runserver 8080
 ```
 
+### 5. アクセス
 - API: http://localhost:8080/
-- Admin panel: http://localhost:8080/admin/
-- API documentation: http://localhost:8080/swagger/
+- 管理画面: http://localhost:8080/admin/
+- API文書: http://localhost:8080/swagger/
+
+**管理画面ログイン情報:**
+- ユーザー名: `admin`
+- パスワード: `admin123456`
 
 ## Project Structure
 

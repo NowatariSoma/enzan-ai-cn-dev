@@ -1,16 +1,14 @@
 services:
   db:
-    image: postgres:16
+    image: mysql:8.0
     container_name: mlp_db
     environment:
-      POSTGRES_DB: 'mlp_db'
-      POSTGRES_PASSWORD: 'postgres_pass'
-    env_file:
-      - ./backend/.env
+      MYSQL_DATABASE: 'mlp_db'
+      MYSQL_ROOT_PASSWORD: 'mysql_pass'
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     ports:
-      - '5432:5432'
+      - '3306:3306'
     networks:
       - mlp_network
 
@@ -26,12 +24,12 @@ services:
     depends_on:
       - db
     env_file:
-      - ./backend/.env
+      - ./admin/.env
     networks:
       - mlp_network
 
 volumes:
-  postgres_data:
+  mysql_data:
   label_studio_data:
 
 networks:
