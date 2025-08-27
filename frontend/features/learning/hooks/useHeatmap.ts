@@ -57,7 +57,13 @@ export function useHeatmap() {
         if (values1.length === 0 || values2.length === 0) {
           correlationMatrix[col1][col2] = 0;
         } else if (col1 === col2) {
-          correlationMatrix[col1][col2] = 1;
+          // 対角線要素：有効な値が少ない場合は相関を0にする
+          const validValues = numericData.map(row => row[col1]).filter(v => v !== undefined);
+          if (validValues.length < numericData.length * 0.1) {
+            correlationMatrix[col1][col2] = 0; // NaNだらけの列は相関0
+          } else {
+            correlationMatrix[col1][col2] = 1;
+          }
         } else {
           // ピアソン相関係数を計算
           const mean1 = values1.reduce((a, b) => a + b, 0) / values1.length;
@@ -122,14 +128,45 @@ export function useHeatmap() {
 
       // 利用可能な列を取得
       const allColumns = Object.keys(combinedData[0] || {});
-      const numericColumns = allColumns.filter(col => {
-        return combinedData.some(row => typeof row[col] === 'number' && !isNaN(row[col]));
-      });
-
       setAvailableColumns(allColumns);
       
-      // 最大20列に制限
-      const featuresToUse = numericColumns.slice(0, 20);
+      // X列の特徴量（26列）+ Y列（目的変数）をハードコーディング
+      const candidateFeatures = [
+        // X列特徴量（26列）
+        '切羽からの距離',
+        '計測経過日数',
+        '沈下量',                    // Settlement用
+        '変位量',                    // Convergence用
+        '支保寸法',
+        '吹付厚',
+        'ﾛｯｸﾎﾞﾙﾄ数',
+        'ﾛｯｸﾎﾞﾙﾄ長',
+        '覆工厚',
+        '土被り高さ',
+        '岩石グループ',
+        '岩石名コード',
+        '加重平均評価点',
+        '圧縮強度',
+        '風化変質',
+        '割目間隔',
+        '割目状態',
+        '割目の方向・平行',
+        '湧水量',
+        '劣化',
+        '評価点',
+        '補助工法の緒元_bit',
+        '増し支保工の緒元_bit',
+        '計測条件・状態等_bit',
+        'インバートの早期障害_bit',
+        '支保工種_numeric',
+        '支保パターン2_numeric',
+        // Y列（目的変数）
+        '最終沈下量との差分',          // Settlement用
+        '最終変位量との差分'           // Convergence用
+      ].filter(col => allColumns.includes(col));
+
+      // 全ての候補特徴量を使用（列の除外はしない）
+      const featuresToUse = candidateFeatures;
       
       if (featuresToUse.length < 2) {
         throw new Error('Not enough numeric columns for correlation analysis');
@@ -137,46 +174,11 @@ export function useHeatmap() {
 
       const { heatmapData, validColumns } = calculateCorrelation(combinedData, featuresToUse);
       
+      // 指定した順序を保持するため、featuresToUseの順序でvalidColumnsを並び替え
+      const orderedFeatures = featuresToUse.filter(col => validColumns?.includes(col) || featuresToUse.includes(col));
+      
       setHeatmapData(heatmapData);
-      setFeatures(validColumns || featuresToUse);
-
-      /* 一時的にモックデータを使用（バックアップ）
-      const mockFeatures = [
-        'TD', 'Distance_from_face', 'Excavation_advance', 'Ground_condition',
-        'Support_type', 'Overburden', 'Groundwater', 'Rock_strength',
-        'Tunnel_diameter', 'Depth', 'Geological_formation', 'Weather_condition'
-      ];
-
-      const mockHeatmapData: HeatmapData[] = [];
-      for (let i = 0; i < mockFeatures.length; i++) {
-        for (let j = 0; j < mockFeatures.length; j++) {
-          let correlation;
-          if (i === j) {
-            correlation = 1.0;
-          } else {
-            const baseCorrelation = (Math.random() - 0.5) * 2;
-            if (Math.abs(i - j) === 1) {
-              correlation = baseCorrelation * 0.7;
-            } else if (Math.abs(i - j) <= 3) {
-              correlation = baseCorrelation * 0.5;
-            } else {
-              correlation = baseCorrelation * 0.3;
-            }
-            correlation = Math.max(-0.95, Math.min(0.95, correlation));
-          }
-          
-          mockHeatmapData.push({
-            x: mockFeatures[j],
-            y: mockFeatures[i],
-            value: correlation
-          });
-        }
-      }
-
-      setHeatmapData(mockHeatmapData);
-      setFeatures(mockFeatures);
-      setAvailableColumns(mockFeatures);
-      */
+      setFeatures(orderedFeatures);
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';

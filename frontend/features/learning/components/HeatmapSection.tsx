@@ -151,7 +151,7 @@ export function HeatmapSection({ title, data, features }: HeatmapSectionProps) {
         </div>
         
         <p className="text-sm text-gray-500 text-center mt-4">
-          特徴量間の相関関係
+          X列特徴量（座標・変位）間の相関関係
         </p>
       </CardContent>
     </Card>
