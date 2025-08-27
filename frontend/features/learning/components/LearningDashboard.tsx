@@ -95,20 +95,6 @@ export function LearningDashboard() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="data-type-select" className="text-sm font-medium text-gray-700">
-                Data Type
-              </Label>
-              <Select value={dataType} onValueChange={(value: 'settlement' | 'convergence') => setDataType(value)}>
-                <SelectTrigger id="data-type-select" className="w-full">
-                  <SelectValue placeholder="データタイプを選択してください" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="settlement">Settlement (沈下量)</SelectItem>
-                  <SelectItem value="convergence">Convergence (変位量)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
             <div className="space-y-2">
               <Label htmlFor="prediction-td" className="text-sm font-medium text-gray-700">
@@ -204,21 +190,21 @@ export function LearningDashboard() {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Train Data</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <ScatterPlotSection
-            title={`Actual vs Predicted for ${dataType === 'settlement' ? '沈下量' : '変位量'}A (Train Data)`}
+            title="Actual vs Predicted for 沈下量 (Train Data)"
             data={trainScatterDataA}
             rSquared={trainRSquaredA}
             mse={trainMSEA}
-            xLabel={`Actual ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
-            yLabel={`Predicted ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
+            xLabel="Actual 沈下量"
+            yLabel="Predicted 沈下量"
           />
           
           <ScatterPlotSection
-            title={`Actual vs Predicted for ${dataType === 'settlement' ? '沈下量' : '変位量'}B (Train Data)`}
+            title="Actual vs Predicted for 変位量 (Train Data)"
             data={trainScatterDataB}
             rSquared={trainRSquaredB}
             mse={trainMSEB}
-            xLabel={`Actual ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
-            yLabel={`Predicted ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
+            xLabel="Actual 変位量"
+            yLabel="Predicted 変位量"
           />
         </div>
       </div>
@@ -228,21 +214,21 @@ export function LearningDashboard() {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Validation Data</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <ScatterPlotSection
-            title={`Actual vs Predicted for ${dataType === 'settlement' ? '沈下量' : '変位量'}A (Validation Data)`}
+            title="Actual vs Predicted for 沈下量 (Validation Data)"
             data={validationScatterDataA}
             rSquared={validationRSquaredA}
             mse={validationMSEA}
-            xLabel={`Actual ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
-            yLabel={`Predicted ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
+            xLabel="Actual 沈下量"
+            yLabel="Predicted 沈下量"
           />
           
           <ScatterPlotSection
-            title={`Actual vs Predicted for ${dataType === 'settlement' ? '沈下量' : '変位量'}B (Validation Data)`}
+            title="Actual vs Predicted for 変位量 (Validation Data)"
             data={validationScatterDataB}
             rSquared={validationRSquaredB}
             mse={validationMSEB}
-            xLabel={`Actual ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
-            yLabel={`Predicted ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
+            xLabel="Actual 変位量"
+            yLabel="Predicted 変位量"
           />
         </div>
       </div>
