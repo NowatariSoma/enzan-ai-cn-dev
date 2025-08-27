@@ -2,8 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/layout/card';
 import { Skeleton } from '@/components/ui/feedback/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/feedback/alert';
-import { AlertCircle } from 'lucide-react';
+import { ErrorAlert } from '@/shared/components/common/ErrorAlert';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ScatterChart, Scatter, Cell, Rectangle } from 'recharts';
 import { useMeasurementsData } from '../hooks/useMeasurementsData';
 
@@ -186,14 +185,10 @@ export function MeasurementsPage() {
   // Show error state
   if (error) {
     return (
-      <Alert className="border-red-200 bg-red-50">
-        <AlertCircle className="h-4 w-4 text-red-600" />
-        <AlertDescription className="text-red-800">
-          データの取得に失敗しました。
-          <br />
-          <span className="text-sm">エラー: {error}</span>
-        </AlertDescription>
-      </Alert>
+      <ErrorAlert 
+        title="AI-A計測集計のデータが見つかりません。利用可能なフォルダから選択してください。"
+        error={error}
+      />
     );
   }
 

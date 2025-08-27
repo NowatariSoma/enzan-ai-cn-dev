@@ -11,11 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/inputs/select";
-import { Alert, AlertDescription } from "@/components/ui/feedback/alert";
+import { ErrorAlert } from "@/shared/components/common/ErrorAlert";
 import { ChartsSection } from "./ChartsSection";
 import { PredictionDataTable } from "./PredictionDataTable";
 import { usePredictionData, useSimulation } from "../hooks";
-import { Calculator, TrendingUp, Activity, AlertCircle } from "lucide-react";
+import { Calculator, TrendingUp, Activity } from "lucide-react";
 
 export function SimulationDashboard() {
   const {
@@ -46,10 +46,10 @@ export function SimulationDashboard() {
     <div className="space-y-6">
       {/* Error Alert */}
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <ErrorAlert 
+          title={error}
+          error=""
+        />
       )}
 
       {/* Control Panel */}
