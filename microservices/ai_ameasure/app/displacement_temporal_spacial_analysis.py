@@ -542,6 +542,8 @@ def analyze_displacement(
     )
 
     # analyize the final displacement data
+    all_metrics = {}  # Store all metrics
+    
     def process_each(model, df, x_columns, y_column, td):
         try:
             draw_heatmap(
@@ -555,6 +557,9 @@ def analyze_displacement(
             df_train, df_validate, model, metrics = analyize_ml(
                 model, df_train, df_validate, x_columns, y_column
             )
+            
+            # Store the metrics with column name as key
+            all_metrics[y_column] = metrics
 
             # Scatter plot of actual vs predicted values for training data
             def draw_scatter_plot(output_path, gt, pred, label, text):
@@ -640,7 +645,7 @@ def analyze_displacement(
         x_columns = [x for x in x_columns if x != y_column]
         model = process_each(model, df, x_columns, y_column, td)
         joblib.dump(model, model_paths["prediction_model"][i])
-    return df_all
+    return df_all, all_metrics
 
 
 def main():

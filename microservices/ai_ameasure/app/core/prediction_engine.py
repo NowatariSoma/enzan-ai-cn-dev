@@ -1,25 +1,61 @@
 """
-機械学習予測・シミュレーションエンジン
+機械学習予測・シミュレーションエンジン（ai_ameasureのオリジナルアルゴリズム統合版）
 """
 
 import logging
+import math
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import joblib
+import matplotlib
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from app.core.config import settings
 from app.core.csv_loader import CSVDataLoader
+import sys
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# 元のai_ameasureのパスを動的に取得（Docker環境対応）
+current_file_path = Path(__file__).resolve()
+if "/app/" in str(current_file_path):
+    # Docker環境: マウントされた /app/ai_ameasure を使用
+    original_ai_ameasure_path = Path("/app/ai_ameasure")
+else:
+    # ローカル環境: 従来通り
+    original_ai_ameasure_path = Path("/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure")
+
+if original_ai_ameasure_path.exists():
+    sys.path.insert(0, str(original_ai_ameasure_path))
+    logger.info(f"Successfully added ai_ameasure path: {original_ai_ameasure_path}")
+else:
+    logger.error(f"Cannot find ai_ameasure directory at: {original_ai_ameasure_path}")
+    raise ImportError(f"ai_ameasure directory not found at {original_ai_ameasure_path}")
+
+from app.displacement_temporal_spacial_analysis import analyze_displacement
+from app.displacement_temporal_spacial_analysis import (
+    create_dataset,
+    generate_additional_info_df, 
+    generate_dataframes,
+)
 from app.models.manager import ModelManager
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import japanize_matplotlib
 
 logger = logging.getLogger(__name__)
 
 
 class PredictionEngine:
-    """機械学習予測・シミュレーションエンジン"""
+    """機械学習予測・シミュレーションエンジン（オリジナルアルゴリズム統合版）"""
 
     def __init__(self):
         self.model_manager = ModelManager(
@@ -27,7 +63,7 @@ class PredictionEngine:
         )
         self.csv_loader = CSVDataLoader()
 
-        # 特徴量・ターゲット列の定義
+        # オリジナルの特徴量・ターゲット列定義（高度な特徴エンジニアリング対応）
         self.feature_columns = ["TD(m)", "切羽TD", "実TD", "ｻｲｸﾙNo"]
         self.settlement_columns = [
             "沈下量1",
@@ -52,7 +88,7 @@ class PredictionEngine:
 
     def load_training_data(self, folder_name: str = "01-hokkaido-akan") -> pd.DataFrame:
         """
-        訓練用データを読み込む
+        訓練用データを読み込む (dataframe_cacheを使用)
 
         Args:
             folder_name: データフォルダ名
@@ -60,10 +96,19 @@ class PredictionEngine:
         Returns:
             DataFrame: 訓練用データ
         """
-        df = self.csv_loader.load_all_measurement_data(settings.DATA_FOLDER, folder_name)
+        from app.core.dataframe_cache import get_dataframe_cache
+        
+        # キャッシュからデータを取得
+        cache = get_dataframe_cache()
+        cached_data = cache.get_cached_data(folder_name, 100.0)  # デフォルト最大距離100m
+        
+        if not cached_data:
+            raise ValueError(f"No training data found for {folder_name} in cache")
+            
+        df = cached_data["df_all"]
 
         if df.empty:
-            raise ValueError(f"No training data found for {folder_name}")
+            raise ValueError(f"Empty training data for {folder_name}")
 
         # 数値列のみを抽出
         numeric_columns = df.select_dtypes(include=[np.number]).columns
@@ -72,7 +117,7 @@ class PredictionEngine:
         # 欠損値を除去
         df_clean = df_numeric.dropna()
 
-        logger.info(f"Loaded training data: {df_clean.shape}")
+        logger.info(f"Loaded training data from cache: {df_clean.shape}")
         return df_clean
 
     def prepare_features_targets(
@@ -126,17 +171,17 @@ class PredictionEngine:
         self,
         model_name: str,
         folder_name: str = "01-hokkaido-akan",
-        target_type: str = "settlement",
-        test_size: float = 0.2,
+        max_distance_from_face: float = 100.0,
+        td: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
-        モデルを訓練
+        オリジナルアルゴリズムによるモデル訓練
 
         Args:
             model_name: モデル名
             folder_name: データフォルダ名
-            target_type: ターゲットタイプ
-            test_size: テストデータの割合
+            max_distance_from_face: 切羽からの最大距離
+            td: TD値でのフィルタ
 
         Returns:
             Dict: 訓練結果
@@ -144,70 +189,74 @@ class PredictionEngine:
         start_time = time.time()
 
         try:
-            # データ読み込み
-            df = self.load_training_data(folder_name)
-            X, y = self.prepare_features_targets(df, target_type)
+            # データフォルダパスを環境変数から取得（Docker対応）
+            input_folder = settings.DATA_FOLDER / folder_name / "main_tunnel" / "CN_measurement_data"
+            output_path = Path("./output")
+            output_path.mkdir(exist_ok=True)
 
-            if len(X) < 10:
-                raise ValueError(f"Insufficient training data: {len(X)} samples")
+            # モデルパス設定
+            model_paths = {
+                "final_value_prediction_model": [
+                    output_path / "model_final_settlement.pkl",
+                    output_path / "model_final_convergence.pkl",
+                ],
+                "prediction_model": [
+                    output_path / "model_settlement.pkl",
+                    output_path / "model_convergence.pkl",
+                ],
+            }
 
-            # データ分割
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=42
+            # オリジナルと完全に同じモデルを使用
+            from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegressor
+            from sklearn.linear_model import LinearRegression
+            from sklearn.svm import SVR
+            from sklearn.neural_network import MLPRegressor
+            
+            original_models = {
+                "random_forest": RandomForestRegressor(random_state=42),
+                "linear_regression": LinearRegression(),
+                "svr": SVR(kernel='linear', C=1.0, epsilon=0.2),
+                "hist_gradient_boosting": HistGradientBoostingRegressor(random_state=42),
+                "mlp": MLPRegressor(hidden_layer_sizes=(100, 100, 50), max_iter=1000, random_state=42),
+            }
+            
+            # オリジナルと完全に同じモデルインスタンスを使用
+            model_instance = original_models.get(model_name, RandomForestRegressor(random_state=42))
+
+            # オリジナルの高度な学習処理を実行
+            df_all, training_metrics = analyze_displacement(
+                str(input_folder),
+                str(output_path),
+                model_paths,
+                model_instance,
+                max_distance_from_face,
+                td=td,
             )
 
-            # モデル訓練
-            model = self.model_manager.train_model(model_name, X_train, y_train)
-
-            # 評価
-            train_pred = model.predict(X_train)
-            test_pred = model.predict(X_test)
-
-            # 多出力の場合は平均スコアを計算
-            if y_train.shape[1] > 1:
-                train_score = np.mean(
-                    [
-                        r2_score(y_train.iloc[:, i], train_pred[:, i])
-                        for i in range(y_train.shape[1])
-                    ]
-                )
-                test_score = np.mean(
-                    [r2_score(y_test.iloc[:, i], test_pred[:, i]) for i in range(y_test.shape[1])]
-                )
-            else:
-                train_score = r2_score(y_train, train_pred)
-                test_score = r2_score(y_test, test_pred)
-
-            # 特徴量重要度（利用可能な場合）
-            feature_importance = None
-            try:
-                if hasattr(model.model, "feature_importances_"):
-                    importances = model.model.feature_importances_
-                    feature_importance = [
-                        {"feature": col, "importance": float(imp)}
-                        for col, imp in zip(X.columns, importances)
-                    ]
-                    feature_importance.sort(key=lambda x: x["importance"], reverse=True)
-            except:
-                pass
-
-            # モデル保存
-            self.model_manager.save_model(model_name)
-
+            # 訓練結果の統計を計算
             processing_time = time.time() - start_time
 
             result = {
                 "model_name": model_name,
-                "training_score": float(train_score),
-                "validation_score": float(test_score),
-                "test_score": float(test_score),
-                "feature_importance": feature_importance,
-                "training_samples": len(X_train),
-                "validation_samples": len(X_test),
+                "folder_name": folder_name,
+                "max_distance_from_face": max_distance_from_face,
+                "td": td,
+                "training_samples": len(df_all),
                 "processing_time": processing_time,
+                "training_metrics": training_metrics,  # 実際の学習メトリクスを含める
+                "models_saved": {
+                    "settlement": str(model_paths["prediction_model"][0]),
+                    "convergence": str(model_paths["prediction_model"][1]),
+                    "final_settlement": str(model_paths["final_value_prediction_model"][0]),
+                    "final_convergence": str(model_paths["final_value_prediction_model"][1]),
+                },
+                "status": "success",
             }
 
-            logger.info(f"Model {model_name} trained successfully. Score: {test_score:.3f}")
+            logger.info(
+                f"Model training completed for {folder_name}. "
+                f"Processed {len(df_all)} samples in {processing_time:.2f}s"
+            )
             return result
 
         except Exception as e:
@@ -218,44 +267,30 @@ class PredictionEngine:
         self, model_name: str, features: Dict[str, float], folder_name: str = "01-hokkaido-akan"
     ) -> Dict[str, Any]:
         """
-        予測を実行
+        訓練済みモデルによる予測実行
 
         Args:
             model_name: モデル名
             features: 特徴量
-            folder_name: データフォルダ名（参考用）
+            folder_name: データフォルダ名
 
         Returns:
             Dict: 予測結果
         """
         try:
-            # モデル読み込み（必要に応じて）
-            try:
-                model = self.model_manager.load_model(model_name)
-            except:
+            # 保存済みモデルを直接読み込み
+            model_path = Path("./output") / f"model_{model_name}.pkl"
+
+            if not model_path.exists():
                 # モデルが存在しない場合は訓練
                 logger.warning(f"Model {model_name} not found, training new model")
-                self.train_model(model_name, folder_name)
-                model = self.model_manager.get_model(model_name)
+                self.train_model("random_forest", folder_name)
 
-            # 訓練時に使用した特徴量のみを使用
-            # まず訓練データを読み込んで特徴量を確認
-            df = self.load_training_data(folder_name)
-            target_type = "settlement" if "settlement" in model_name else "convergence"
-            X_train, _ = self.prepare_features_targets(df, target_type)
-            training_features = list(X_train.columns)
+            # joblibでモデルを直接読み込み
+            model = joblib.load(str(model_path))
 
-            # 入力特徴量を訓練時の特徴量に合わせる
-            aligned_features = {}
-            for col in training_features:
-                if col in features:
-                    aligned_features[col] = features[col]
-                else:
-                    # デフォルト値を設定
-                    aligned_features[col] = 0.0
-
-            # 特徴量をDataFrameに変換
-            feature_df = pd.DataFrame([aligned_features])
+            # 特徴量をDataFrameに変換（オリジナルの特徴量に合わせる）
+            feature_df = pd.DataFrame([features])
 
             # 予測実行
             prediction = model.predict(feature_df)
@@ -264,15 +299,13 @@ class PredictionEngine:
             if prediction.ndim > 1 and prediction.shape[1] > 1:
                 pred_values = prediction[0].tolist()
             else:
-                pred_values = (
-                    float(prediction[0]) if hasattr(prediction[0], "item") else float(prediction[0])
-                )
+                pred_values = float(prediction[0]) if hasattr(prediction[0], "item") else float(prediction[0])
 
             result = {
                 "model_name": model_name,
                 "prediction": pred_values,
                 "features": features,
-                "confidence": None,  # 実装可能であれば追加
+                "model_path": str(model_path),
             }
 
             return result
