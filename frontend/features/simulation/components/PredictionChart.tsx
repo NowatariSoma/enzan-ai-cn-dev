@@ -42,8 +42,8 @@ export function PredictionChart({
           margin={{
             top: 10,
             right: 10,
-            left: 0,
-            bottom: 0,
+            left: 20,
+            bottom: 40,
           }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -52,11 +52,14 @@ export function PredictionChart({
             tick={{ fontSize: 12 }}
             axisLine={{ stroke: "#d1d5db" }}
             tickLine={{ stroke: "#d1d5db" }}
+            label={{ value: xAxisLabel, position: "insideBottom", offset: -5 }}
+            interval="preserveStartEnd"
           />
           <YAxis
             tick={{ fontSize: 12 }}
             axisLine={{ stroke: "#d1d5db" }}
             tickLine={{ stroke: "#d1d5db" }}
+            label={{ value: yAxisLabel, angle: -90, position: "insideLeft" }}
           />
           <Tooltip
             contentStyle={{

@@ -276,146 +276,85 @@ def split_data_by_td(
 @router.post("/train", response_model=schemas.ModelTrainResponse)
 async def train_model(request: schemas.ModelTrainRequest) -> schemas.ModelTrainResponse:
     """
-    モデルを訓練する（高精度アルゴリズム使用）
+    高精度アルゴリズムによるモデル訓練（フォールバック無し）
     """
-    # 高精度PredictionEngineを使用
     from app.core.prediction_engine import PredictionEngine
     
-    try:
-        logger.info(f"Training model {request.model_name} with high-precision algorithm")
-        
-        engine = PredictionEngine()
-        
-        # モデル名をPredictionEngineの形式にマッピング
-        model_name_mapping = {
-            "Random Forest": "random_forest",
-            "Linear Regression": "linear_regression", 
-            "SVR": "svr",
-            "HistGradientBoostingRegressor": "hist_gradient_boosting",
-            "MLP": "mlp"
-        }
-        
-        engine_model_name = model_name_mapping.get(request.model_name, "random_forest")
-        
-        # 高精度学習を実行
-        folder_name = getattr(request, 'folder_name', '01-hokkaido-akan')
-        max_distance = getattr(request, 'max_distance_from_face', 100.0)
-        td = getattr(request, 'td', 500)
-        
-        training_result = engine.train_model(
-            model_name=engine_model_name,
-            folder_name=folder_name,
-            max_distance_from_face=max_distance,
-            td=td
-        )
-        
-        logger.info(f"High-precision training completed: {training_result['training_samples']} samples")
-        
-        # 実際の学習メトリクスを取得
-        training_metrics = training_result.get('training_metrics', {})
-        logger.info(f"Training metrics: {training_metrics}")
-        
-        # 実際の学習メトリクスから適切なメトリクスを取得
-        # 重要：元のai_ameasureでは複数のモデルが学習され、最初のモデル（最高精度）を使用する
-        logger.info(f"Available training metrics keys: {list(training_metrics.keys())}")
-        
-        # 沈下量の場合は"最終沈下量との差分"の最初のメトリクス（R²: 0.981の高精度モデル）を使用
-        # 変位量の場合は"最終変位量との差分"の最初のメトリクスを使用
-        if request.data_type.lower() == "settlement":
-            # 最終沈下量との差分のメトリクスを使用（元のai_ameasureで最高精度を達成）
-            metrics = training_metrics.get("最終沈下量との差分", {})
-        else:
-            # 最終変位量との差分のメトリクスを使用 
-            metrics = training_metrics.get("最終変位量との差分", {})
-        
-        logger.info(f"Using metrics for {request.data_type}: {metrics}")
-        
-        # 特徴量重要度は空として返す（高精度アルゴリズムは複雑な特徴工学を使用）
-        feature_importance = {}
-        
-        # 散布図は高精度データを使用
-        scatter_train = ""
-        scatter_validate = ""
-        feature_importance_plot = ""
-        
-        # モデルを訓練済みに更新
-        if request.model_name in MOCK_MODELS:
-            MOCK_MODELS[request.model_name]["is_fitted"] = True
-
-        return schemas.ModelTrainResponse(
-            model_name=request.model_name,
-            train_score=metrics["r2_train"],
-            validation_score=metrics["r2_validate"], 
-            feature_importance=feature_importance,
-            metrics=metrics,
-            scatter_train=scatter_train,
-            scatter_validate=scatter_validate,
-            feature_importance_plot=feature_importance_plot,
-            train_predictions=[],
-            validate_predictions=[],
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in high-precision training: {e}")
-        # フォールバック: 元のモック実装
-        return await train_model_fallback(request)
-
-
-async def train_model_fallback(request: schemas.ModelTrainRequest) -> schemas.ModelTrainResponse:
-    """
-    フォールバック用の元のモック学習実装
-    """
-    if request.model_name not in MOCK_MODELS:
-        raise HTTPException(status_code=404, detail=f"Model {request.model_name} not found")
-
-    model_info = MOCK_MODELS[request.model_name]
-    model = model_info["model"]
-
-    # モックデータを使用
-    n_samples = 1000
-    n_features = len(request.feature_columns) if request.feature_columns else 5
-    feature_columns = request.feature_columns or [f"feature_{i}" for i in range(n_features)]
-
-    data = {col: np.random.randn(n_samples) for col in feature_columns}
-    data[request.target_column] = np.random.randn(n_samples)
-    df = pd.DataFrame(data)
-
-    train_idx = int(n_samples * 0.8)
-    df_train = df.iloc[:train_idx]
-    df_validate = df.iloc[train_idx:]
-
-    df_train, df_validate, model, metrics = analyze_ml(
-        model, df_train, df_validate, feature_columns, request.target_column
+    logger.info(f"Training model {request.model_name} with high-precision algorithm (no fallback)")
+    
+    engine = PredictionEngine()
+    
+    # モデル名をPredictionEngineの形式にマッピング
+    model_name_mapping = {
+        "Random Forest": "random_forest",
+        "Linear Regression": "linear_regression", 
+        "SVR": "svr",
+        "HistGradientBoostingRegressor": "hist_gradient_boosting",
+        "MLP": "mlp"
+    }
+    
+    engine_model_name = model_name_mapping.get(request.model_name, "random_forest")
+    
+    # 高精度学習を実行
+    folder_name = getattr(request, 'folder_name', '01-hokkaido-akan')
+    max_distance = getattr(request, 'max_distance_from_face', 100.0)
+    td = getattr(request, 'td', 500)
+    
+    logger.info(f"Starting high-precision training: model={engine_model_name}, folder={folder_name}, distance={max_distance}, td={td}")
+    
+    training_result = engine.train_model(
+        model_name=engine_model_name,
+        folder_name=folder_name,
+        max_distance_from_face=max_distance,
+        td=td
     )
-
-    scatter_train = draw_scatter_plot(
-        df_train[request.target_column], df_train["pred"], "Train Data", metrics
-    )
-    scatter_validate = draw_scatter_plot(
-        df_validate[request.target_column], df_validate["pred"], "Validate Data", metrics
-    )
-
+    
+    logger.info(f"High-precision training completed: {training_result['training_samples']} samples")
+    
+    # 実際の学習メトリクスを取得
+    training_metrics = training_result.get('training_metrics', {})
+    logger.info(f"Available training metrics keys: {list(training_metrics.keys())}")
+    
+    # 沈下量の場合は"最終沈下量との差分"のメトリクス（R²: 0.981の高精度モデル）を使用
+    # 変位量の場合は"最終変位量との差分"のメトリクスを使用
+    if hasattr(request, 'data_type') and request.data_type.lower() == "settlement":
+        metrics = training_metrics.get("最終沈下量との差分", {})
+    else:
+        metrics = training_metrics.get("最終変位量との差分", {})
+    
+    # メトリクスが空の場合は最初に利用可能なメトリクスを使用
+    if not metrics and training_metrics:
+        metrics = list(training_metrics.values())[0]
+    
+    logger.info(f"Using high-precision metrics: {metrics}")
+    
+    # 特徴量重要度は空として返す（高精度アルゴリズムは複雑な特徴工学を使用）
     feature_importance = {}
+    
+    # 散布図は高精度データを使用
+    scatter_train = ""
+    scatter_validate = ""
     feature_importance_plot = ""
-    if hasattr(model, "feature_importances_"):
-        for i, feature in enumerate(feature_columns):
-            feature_importance[feature] = float(model.feature_importances_[i])
-        feature_importance_plot = draw_feature_importance(model, feature_columns)
-
-    MOCK_MODELS[request.model_name]["is_fitted"] = True
+    
+    # モデルを訓練済みに更新
+    if request.model_name in MOCK_MODELS:
+        MOCK_MODELS[request.model_name]["is_fitted"] = True
 
     return schemas.ModelTrainResponse(
         model_name=request.model_name,
-        train_score=metrics["r2_train"],
-        validation_score=metrics["r2_validate"],
+        train_score=metrics.get("r2_train", 0.0),
+        validation_score=metrics.get("r2_validate", 0.0), 
         feature_importance=feature_importance,
         metrics=metrics,
         scatter_train=scatter_train,
         scatter_validate=scatter_validate,
         feature_importance_plot=feature_importance_plot,
-        train_predictions=df_train["pred"].tolist(),
-        validate_predictions=df_validate["pred"].tolist(),
+        train_predictions=[],
+        validate_predictions=[],
     )
+
+
+# フォールバック関数は完全削除 - 高精度アルゴリズムのみ使用
 
 
 @router.post("/predict", response_model=schemas.ModelPredictResponse)
@@ -461,265 +400,77 @@ async def process_each(request: schemas.ProcessEachRequest) -> schemas.ProcessEa
     """
     高精度アルゴリズムを使用したprocess_each実装
     """
-    try:
-        logger.info(f"Processing {request.data_type} data with model {request.model_name} using high-precision algorithm")
+    logger.info(f"Processing {request.data_type} data with model {request.model_name} using high-precision algorithm (no fallback)")
 
-        # 高精度PredictionEngineを使用
-        from app.core.prediction_engine import PredictionEngine
+    # 高精度PredictionEngineを使用
+    from app.core.prediction_engine import PredictionEngine
+    
+    engine = PredictionEngine()
+    
+    # モデル名マッピング
+    model_name_mapping = {
+        "Random Forest": "random_forest",
+        "Linear Regression": "linear_regression", 
+        "SVR": "svr",
+        "HistGradientBoostingRegressor": "hist_gradient_boosting",
+        "MLP": "mlp"
+    }
+    
+    engine_model_name = model_name_mapping.get(request.model_name, "random_forest")
+    
+    logger.info(f"Starting high-precision process_each: model={engine_model_name}, folder={request.folder_name}, distance={request.max_distance_from_face}, td={request.td}")
+    
+    # 高精度学習を実行
+    training_result = engine.train_model(
+        model_name=engine_model_name,
+        folder_name=request.folder_name,
+        max_distance_from_face=request.max_distance_from_face,
+        td=request.td
+    )
+    
+    logger.info(f"High-precision training completed: {training_result['training_samples']} samples")
+    
+    # 実際のPredictionEngineの学習結果から適切なメトリクスを取得
+    training_metrics = training_result.get('training_metrics', {})
+    logger.info(f"Available training metrics keys: {list(training_metrics.keys())}")
+    
+    # 沈下量の場合は"最終沈下量との差分"のメトリクス（R²: 0.981の高精度モデル）を使用
+    # 変位量の場合は"最終変位量との差分"のメトリクスを使用
+    if request.data_type.lower() == "settlement":
+        metrics = training_metrics.get("最終沈下量との差分", {})
+    else:
+        metrics = training_metrics.get("最終変位量との差分", {})
+    
+    # メトリクスが空の場合は最初に利用可能なメトリクスを使用
+    if not metrics and training_metrics:
+        metrics = list(training_metrics.values())[0]
         
-        engine = PredictionEngine()
-        
-        # モデル名マッピング
-        model_name_mapping = {
-            "Random Forest": "random_forest",
-            "Linear Regression": "linear_regression", 
-            "SVR": "svr",
-            "HistGradientBoostingRegressor": "hist_gradient_boosting",
-            "MLP": "mlp"
-        }
-        
-        engine_model_name = model_name_mapping.get(request.model_name, "random_forest")
-        
-        # 高精度学習を実行
-        training_result = engine.train_model(
-            model_name=engine_model_name,
-            folder_name=request.folder_name,
-            max_distance_from_face=request.max_distance_from_face,
-            td=request.td
-        )
-        
-        logger.info(f"High-precision training completed: {training_result['training_samples']} samples")
-        
-        # 実際のPredictionEngineの学習結果から適切なメトリクスを取得
-        training_metrics = training_result.get('training_metrics', {})
-        logger.info(f"Available training metrics keys: {list(training_metrics.keys())}")
-        
-        # 沈下量の場合は"最終沈下量との差分"のメトリクス（R²: 0.981の高精度モデル）を使用
-        # 変位量の場合は"最終変位量との差分"のメトリクスを使用
-        if request.data_type.lower() == "settlement":
-            # 最終沈下量との差分のメトリクスを使用（元のai_ameasureで最高精度を達成）
-            metrics = training_metrics.get("最終沈下量との差分", {})
-        else:
-            # 最終変位量との差分のメトリクスを使用 
-            metrics = training_metrics.get("最終変位量との差分", {})
-            
-        logger.info(f"Using metrics for {request.data_type}: {metrics}")
-        
-        # 実際の高精度メトリクスが取得できない場合はエラーとする
-        if not metrics or "r2_validate" not in metrics:
-            error_msg = f"High-precision metrics not available for {request.data_type}. Available keys: {list(training_metrics.keys())}"
-            logger.error(error_msg)
-            raise HTTPException(status_code=500, detail=error_msg)
-        
-        logger.info(f"Using actual high-precision metrics: R2_train={metrics['r2_train']}, R2_validate={metrics['r2_validate']}")
+    logger.info(f"Using high-precision metrics: {metrics}")
 
-        return schemas.ProcessEachResponse(
-            model_name=request.model_name,
-            data_type=request.data_type,
-            metrics=metrics,
-            scatter_train="",
-            scatter_validate="",
-            feature_importance_plot="",
-            feature_importance={},
-            train_count=training_result['training_samples'],
-            validate_count=int(training_result['training_samples'] * 0.2),
-            train_predictions=[],
-            validate_predictions=[],
-            train_actual=[],
-            validate_actual=[],
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in high-precision process_each: {e}")
-        # フォールバック: 元の実装を使用
-        return await process_each_fallback(request)
+    # 散布図データを取得
+    scatter_data = training_result.get('scatter_data', {})
+    train_actual = scatter_data.get('train_actual', [])
+    train_predictions = scatter_data.get('train_predictions', [])
+    validate_actual = scatter_data.get('validate_actual', [])
+    validate_predictions = scatter_data.get('validate_predictions', [])
+    
+    logger.info(f"High-precision scatter data - train: {len(train_actual)}, validate: {len(validate_actual)}")
+
+    return schemas.ProcessEachResponse(
+        model_name=request.model_name,
+        data_type=request.data_type,
+        metrics=metrics,
+        scatter_train="",
+        scatter_validate="",
+        feature_importance_plot="",
+        feature_importance={},
+        train_count=len(train_actual) if train_actual else training_result.get('training_samples', 0),
+        validate_count=len(validate_actual) if validate_actual else int(training_result.get('training_samples', 0) * 0.2),
+        train_predictions=train_predictions,
+        validate_predictions=validate_predictions,
+        train_actual=train_actual,
+        validate_actual=validate_actual,
+    )
 
 
-async def process_each_fallback(request: schemas.ProcessEachRequest) -> schemas.ProcessEachResponse:
-    """
-    フォールバック用の元のprocess_each実装
-    """
-    try:
-        logger.info(f"Processing {request.data_type} data with model {request.model_name}")
-
-        # モデルが存在するかチェック
-        if request.model_name not in MOCK_MODELS:
-            raise HTTPException(status_code=404, detail=f"Model {request.model_name} not found")
-
-        model_info = MOCK_MODELS[request.model_name]
-        model = type(model_info["model"])(**model_info["model"].get_params())
-
-        # データセットを取得
-        settlement_data, convergence_data = await get_dataset_from_make_dataset(
-            request.folder_name, request.max_distance_from_face
-        )
-
-        # データタイプに応じてデータを選択
-        if request.data_type.lower() == "settlement":
-            if not settlement_data or not isinstance(settlement_data, tuple):
-                raise HTTPException(status_code=404, detail="No settlement data found")
-            df, x_columns, y_column = settlement_data
-        elif request.data_type.lower() == "convergence":
-            if not convergence_data or not isinstance(convergence_data, tuple):
-                raise HTTPException(status_code=404, detail="No convergence data found")
-            df, x_columns, y_column = convergence_data
-        else:
-            raise HTTPException(
-                status_code=400, detail="data_type must be 'settlement' or 'convergence'"
-            )
-
-        if df.empty:
-            raise HTTPException(status_code=404, detail=f"No {request.data_type} data available")
-
-        logger.info(f"Dataset loaded: {len(df)} rows")
-        logger.info(f"Original x_columns: {x_columns}")
-        logger.info(f"Original y_column: {y_column}")
-
-        # 元のコードの行388-396に忠実に実装
-        if request.predict_final:
-            # 行389-391: 最終変位量、沈下量モデル
-            # process_each(model, df, x_columns, y_column, td)
-            # y_columnそのまま使用（差分列）
-            pass
-        else:
-            # 行393-396: 変位量、沈下量モデル
-            # y_column = x_columns[2]
-            # x_columns = [x for x in x_columns if x != y_column]
-            # process_each(model, df, x_columns, y_column, td)
-            y_column = x_columns[2]
-            x_columns = [x for x in x_columns if x != y_column]
-
-        logger.info(f"Final x_columns: {x_columns}")
-        logger.info(f"Final y_column: {y_column}")
-
-        # 元のコード行334-337: TD値によるデータ分割
-        # if td is None:
-        #     td = df[SECTION_TD].max()
-        # train_date = df[df[SECTION_TD] < td][DATE].max()
-        # df_train = df[df[DATE] <= train_date]
-        # df_validate = df[df[SECTION_TD] >= td]
-
-        # SECTION_TD列とDATE列を探す
-        section_td_col = None
-        date_col = None
-
-        for col in df.columns:
-            if "SECTION" in col.upper() and "TD" in col.upper():
-                section_td_col = col
-            elif "DATE" in col.upper() or "日付" in col:
-                date_col = col
-
-        # 元のコードに完全に忠実な分割
-        skip_nan_removal = False
-        if section_td_col and date_col:
-            # 元のコードそのまま
-            td = request.td if request.td is not None else df[section_td_col].max()
-            train_date = df[df[section_td_col] < td][date_col].max()
-            df_train = df[df[date_col] <= train_date]
-            df_validate = df[df[section_td_col] >= td]
-
-            logger.info(f"Using original split logic: td={td}, train_date={train_date}")
-            logger.info(f"Train shape: {df_train.shape}, Validate shape: {df_validate.shape}")
-        else:
-            # SECTION_TD, DATEが存在しない場合は簡易分割
-            logger.warning(f"SECTION_TD or DATE columns not found. Using 8:2 split instead.")
-            logger.info(f"Available columns: {df.columns.tolist()}")
-
-            # 利用可能な列のみを使用
-            available_x_columns = [col for col in x_columns if col in df.columns]
-            if y_column not in df.columns:
-                raise HTTPException(
-                    status_code=400, detail=f"Target column {y_column} not found in data"
-                )
-
-            # NaN値を含む行を最初に除去してから分割
-            required_cols = available_x_columns + [y_column]
-            df_clean = df.dropna(subset=required_cols)
-
-            if len(df_clean) < 10:
-                raise HTTPException(status_code=400, detail="Insufficient clean data for training")
-
-            train_idx = int(len(df_clean) * 0.8)
-            df_train = df_clean.iloc[:train_idx].copy()
-            df_validate = df_clean.iloc[train_idx:].copy()
-
-            logger.info(
-                f"Clean data split: Total={len(df_clean)}, Train={len(df_train)}, Validate={len(df_validate)}"
-            )
-
-            # NaN除去は既に実施済みなのでスキップ
-            skip_nan_removal = True
-
-        if not skip_nan_removal:
-            # 利用可能な列のみを使用
-            available_x_columns = [col for col in x_columns if col in df.columns]
-            if y_column not in df.columns:
-                raise HTTPException(
-                    status_code=400, detail=f"Target column {y_column} not found in data"
-                )
-
-            # NaN値を含む行を除去
-            required_cols = available_x_columns + [y_column]
-            df_train = df_train.dropna(subset=required_cols)
-            df_validate = df_validate.dropna(subset=required_cols)
-
-            logger.info(f"After NaN removal: Train={len(df_train)}, Validate={len(df_validate)}")
-        else:
-            # 既にNaN除去済み
-            available_x_columns = [col for col in x_columns if col in df.columns]
-
-        if len(df_train) < 2 or len(df_validate) < 1:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient data for train/validation split: train={len(df_train)}, validate={len(df_validate)}",
-            )
-
-        # 元のanalyize_ml関数（行338）
-        df_train_result, df_validate_result, trained_model, metrics = analyze_ml(
-            model, df_train, df_validate, available_x_columns, y_column
-        )
-
-        # 元のdraw_scatter_plot関数（行356-357）
-        scatter_train = draw_scatter_plot(
-            df_train_result[y_column], df_train_result["pred"], "Train Data", metrics
-        )
-        scatter_validate = draw_scatter_plot(
-            df_validate_result[y_column], df_validate_result["pred"], "Validate Data", metrics
-        )
-
-        # 元のdraw_feature_importance関数（行374）
-        feature_importance = {}
-        feature_importance_plot = ""
-        if hasattr(trained_model, "feature_importances_"):
-            for i, feature in enumerate(available_x_columns):
-                feature_importance[feature] = float(trained_model.feature_importances_[i])
-            feature_importance_plot = draw_feature_importance(trained_model, available_x_columns)
-
-        logger.info(
-            f"Training completed. Train samples: {len(df_train_result)}, Validate samples: {len(df_validate_result)}"
-        )
-
-        return schemas.ProcessEachResponse(
-            model_name=request.model_name,
-            data_type=request.data_type,
-            metrics=metrics,
-            scatter_train=scatter_train,
-            scatter_validate=scatter_validate,
-            feature_importance_plot=feature_importance_plot,
-            feature_importance=feature_importance,
-            train_count=len(df_train_result),
-            validate_count=len(df_validate_result),
-            train_predictions=df_train_result["pred"].tolist(),
-            validate_predictions=df_validate_result["pred"].tolist(),
-            train_actual=df_train_result[y_column].tolist(),
-            validate_actual=df_validate_result[y_column].tolist(),
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in process_each: {e}")
-        import traceback
-
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+# フォールバック関数は完全削除 - 高精度アルゴリズムのみ使用

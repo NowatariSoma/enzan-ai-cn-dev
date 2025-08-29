@@ -1,6 +1,13 @@
 import argparse
 import pandas as pd
 import numpy as np
+import warnings
+
+# パフォーマンス警告を抑制
+warnings.filterwarnings('ignore', category=pd.errors.SettingWithCopyWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
+
 import matplotlib
 matplotlib.use('Agg')  # Use a non-interactive backend for matplotlib
 import matplotlib.pyplot as plt
@@ -110,12 +117,25 @@ def generate_additional_info_df(cycle_support_csv, observation_of_face_csv):
     return df_additional_info
 
 def drop_unnecessary_columns(df_distance, index, df_additional_info, x_columns):
-    df_final = df_distance[0].copy().dropna(subset=[CYCLE_NO])
-    df_final[x_columns] = df_distance[index].copy().dropna(subset=[CYCLE_NO])[x_columns]
+    # .copy()を使用してSettingWithCopyWarningを回避
+    df_final = df_distance[0].copy(deep=True).dropna(subset=[CYCLE_NO])
+    
+    # 明示的にcopyを作成してから代入
+    df_x_columns = df_distance[index].copy(deep=True).dropna(subset=[CYCLE_NO])[x_columns]
+    for col in x_columns:
+        if col in df_x_columns.columns:
+            df_final[col] = df_x_columns[col].values
+    
     cycles = df_additional_info[df_additional_info.columns[0]]
-    for i, row in df_final.iterrows():  
-        matching_index = df_additional_info.index[cycles <= row[CYCLE_NO]].max()
-        df_final.loc[i, df_additional_info.columns] = df_additional_info.iloc[matching_index]
+    
+    # locを使用してSettingWithCopyWarningを回避
+    for i in df_final.index:  
+        row = df_final.loc[i]
+        matching_indices = df_additional_info.index[cycles <= row[CYCLE_NO]]
+        if len(matching_indices) > 0:
+            matching_index = matching_indices.max()
+            for col in df_additional_info.columns:
+                df_final.loc[i, col] = df_additional_info.iloc[matching_index][col]
     
     df_data_only = df_final.drop(columns=[DATE, TD_NO])
     df_data_only = df_data_only.select_dtypes(exclude=['object'])
@@ -394,7 +414,97 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
         x_columns = [x for x in x_columns if x != y_column]
         model = process_each(model, df, x_columns, y_column, td)
         joblib.dump(model, model_paths["prediction_model"][i])
-    return df_all
+    
+    # 散布図データを収集して返す
+    training_metrics = {}
+    scatter_data = {
+        'train_actual': [],
+        'train_predictions': [], 
+        'validate_actual': [],
+        'validate_predictions': [],
+        'metrics': {}
+    }
+    
+    # settlementデータの結果を読み込み
+    try:
+        settlement_result_csv = os.path.join(output_path, f"result最終沈下量との差分.csv")
+        print(f"Looking for settlement result CSV at: {settlement_result_csv}")
+        print(f"File exists: {os.path.exists(settlement_result_csv)}")
+        
+        if os.path.exists(settlement_result_csv):
+            settlement_df = pd.read_csv(settlement_result_csv)
+            print(f"Settlement CSV shape: {settlement_df.shape}")
+            print(f"Settlement CSV columns: {settlement_df.columns.tolist()}")
+            
+            settlement_train = settlement_df[settlement_df['mode'] == 'train']
+            settlement_validate = settlement_df[settlement_df['mode'] == 'validate']
+            print(f"Train data shape: {settlement_train.shape}")
+            print(f"Validate data shape: {settlement_validate.shape}")
+            
+            if not settlement_train.empty and not settlement_validate.empty:
+                y_col = '最終沈下量との差分'
+                scatter_data['train_actual'].extend(settlement_train[y_col].tolist())
+                scatter_data['train_predictions'].extend(settlement_train['pred'].tolist())
+                scatter_data['validate_actual'].extend(settlement_validate[y_col].tolist())
+                scatter_data['validate_predictions'].extend(settlement_validate['pred'].tolist())
+                
+                print(f"Collected scatter data - train: {len(scatter_data['train_actual'])}, validate: {len(scatter_data['validate_actual'])}")
+                
+                # メトリクスも計算
+                training_metrics['最終沈下量との差分'] = {
+                    'mse_train': mean_squared_error(settlement_train[y_col], settlement_train['pred']),
+                    'r2_train': r2_score(settlement_train[y_col], settlement_train['pred']),
+                    'mse_validate': mean_squared_error(settlement_validate[y_col], settlement_validate['pred']),
+                    'r2_validate': r2_score(settlement_validate[y_col], settlement_validate['pred'])
+                }
+                print(f"Settlement metrics: {training_metrics['最終沈下量との差分']}")
+        else:
+            print(f"Settlement result CSV not found")
+                
+    except Exception as e:
+        print(f"Error reading settlement results: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # convergenceデータの結果も読み込み
+    try:
+        convergence_result_csv = os.path.join(output_path, f"result最終変位量との差分.csv")
+        print(f"Looking for convergence result CSV at: {convergence_result_csv}")
+        
+        if os.path.exists(convergence_result_csv):
+            convergence_df = pd.read_csv(convergence_result_csv)
+            print(f"Convergence CSV shape: {convergence_df.shape}")
+            
+            convergence_train = convergence_df[convergence_df['mode'] == 'train']
+            convergence_validate = convergence_df[convergence_df['mode'] == 'validate']
+            print(f"Convergence - Train: {convergence_train.shape}, Validate: {convergence_validate.shape}")
+            
+            if not convergence_train.empty and not convergence_validate.empty:
+                y_col = '最終変位量との差分'
+                # convergenceデータも散布図データに追加（settlementデータに追加）
+                scatter_data['train_actual'].extend(convergence_train[y_col].tolist())
+                scatter_data['train_predictions'].extend(convergence_train['pred'].tolist())
+                scatter_data['validate_actual'].extend(convergence_validate[y_col].tolist())
+                scatter_data['validate_predictions'].extend(convergence_validate['pred'].tolist())
+                
+                # メトリクスも計算
+                training_metrics['最終変位量との差分'] = {
+                    'mse_train': mean_squared_error(convergence_train[y_col], convergence_train['pred']),
+                    'r2_train': r2_score(convergence_train[y_col], convergence_train['pred']),
+                    'mse_validate': mean_squared_error(convergence_validate[y_col], convergence_validate['pred']),
+                    'r2_validate': r2_score(convergence_validate[y_col], convergence_validate['pred'])
+                }
+                print(f"Convergence metrics: {training_metrics['最終変位量との差分']}")
+                
+    except Exception as e:
+        print(f"Error reading convergence results: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print(f"Final scatter data collected - train: {len(scatter_data['train_actual'])}, validate: {len(scatter_data['validate_actual'])}")
+    print(f"Training metrics keys: {list(training_metrics.keys())}")
+    
+    return df_all, training_metrics, scatter_data
 
 def main():
     parser = argparse.ArgumentParser(description="Process input and output paths.")

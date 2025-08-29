@@ -35,11 +35,13 @@ export function SimulationDashboard() {
     simulationChartData,
     handleAnalyze,
     chartLines,
+    displacementChartLines,
+    settlementChartLines,
     analysisResult,
     error
   } = useSimulation();
 
-  const { predictionData } = usePredictionData(excavationAdvance, distanceFromFace);
+  const { predictionData } = usePredictionData(excavationAdvance, distanceFromFace, analysisResult?.simulation_data);
 
 
   return (
@@ -182,19 +184,33 @@ export function SimulationDashboard() {
       {/* Display Results Only After Analysis */}
       {analysisResult && (
         <>
-          {/* Prediction Charts */}
-          <ChartsSection
-            title={`Prediction (Actual excavation) - Cycle ${analysisResult.cycle_no} (TD: ${analysisResult.td})`}
-            chartData={predictionChartData}
-            chartLines={chartLines}
-          />
+          {/* Prediction Charts with Actual Data */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ChartsSection
+              title={`最終変位量（実測+予測） - Cycle ${analysisResult.cycle_no}`}
+              chartData={predictionChartData}
+              chartLines={displacementChartLines}
+            />
+            <ChartsSection
+              title={`最終沈下量（実測+予測） - Cycle ${analysisResult.cycle_no}`}
+              chartData={predictionChartData}
+              chartLines={settlementChartLines}
+            />
+          </div>
 
           {/* Simulation Charts */}
-          <ChartsSection
-            title={`Simulation (${excavationAdvance} m/day from TD: ${distanceFromFace}m)`}
-            chartData={simulationChartData}
-            chartLines={chartLines}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ChartsSection
+              title={`最終変位量シミュレーション（実測+予測） (${excavationAdvance} m/day)`}
+              chartData={predictionChartData}
+              chartLines={displacementChartLines}
+            />
+            <ChartsSection
+              title={`最終沈下量シミュレーション（実測+予測） (${excavationAdvance} m/day)`}
+              chartData={predictionChartData}
+              chartLines={settlementChartLines}
+            />
+          </div>
 
           {/* Prediction Data Table */}
           <PredictionDataTable

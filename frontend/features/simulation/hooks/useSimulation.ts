@@ -97,6 +97,35 @@ export function useSimulation() {
     return processedData;
   };
 
+  const processPredictionData = (data: LocalDisplacementResponse) => {
+    // Process the prediction data for charts (actual measurements + predictions)
+    if (!data.prediction_data) {
+      return [];
+    }
+    
+    const processedData = data.prediction_data.map(point => {
+      const processed: any = {
+        distanceFromFace: point.distance_from_face,
+      };
+      
+      // Extract all columns (actual measurements and predictions)
+      Object.keys(point).forEach(key => {
+        if (key !== 'distance_from_face') {
+          // Convert column names to more readable format
+          let displayKey = key;
+          if (key.includes('_prediction')) {
+            displayKey = key.replace('_prediction', '予測');
+          }
+          processed[displayKey] = point[key];
+        }
+      });
+      
+      return processed;
+    });
+    
+    return processedData;
+  };
+
   const handleAnalyze = useCallback(async () => {
     if (!selectedFolder || !cycleNumber) {
       setError('フォルダと測定ファイルを選択してください');
@@ -118,10 +147,12 @@ export function useSimulation() {
       setAnalysisResult(result);
       
       // Process and set chart data
-      const processedData = processSimulationData(result);
-      setChartData(processedData);
-      setPredictionChartData(processedData);
-      setSimulationChartData(processedData);
+      const simulationData = processSimulationData(result);
+      const predictionData = processPredictionData(result);
+      
+      setChartData(simulationData);
+      setPredictionChartData(predictionData);
+      setSimulationChartData(simulationData);
       
     } catch (err) {
       console.error('Analysis failed:', err);
@@ -135,14 +166,69 @@ export function useSimulation() {
   // Generate chart lines based on actual data columns
   const chartLines = chartData.length > 0 
     ? Object.keys(chartData[0])
-        .filter(key => key !== 'distanceFromFace')
+        .filter(key => key !== 'distanceFromFace' && key !== '切羽からの距離')
         .map((key, index) => {
-          const colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#06B6D4", "#EF4444", "#EC4899", "#8B5CF6"];
+          const colors = ["#3B82F6", "#F59E0B", "#10B981", "#8B5CF6", "#06B6D4", "#EF4444", "#EC4899", "#8B5CF6"];
+          // Determine color based on A, B, C pattern
+          let colorIndex = index % colors.length;
+          if (key.includes('A')) colorIndex = 0;
+          else if (key.includes('B')) colorIndex = 1;
+          else if (key.includes('C')) colorIndex = 2;
+          
           return {
             dataKey: key,
-            stroke: colors[index % colors.length],
+            stroke: colors[colorIndex],
             name: key,
-            strokeDasharray: key.includes('予測') ? "5 5" : undefined,
+            strokeDasharray: (key.includes('予測') || key.includes('prediction')) ? undefined : "5 5",
+          };
+        })
+    : [];
+
+  // Generate specific chart lines for displacement data (最終変位量)
+  const displacementChartLines = predictionChartData.length > 0 
+    ? Object.keys(predictionChartData[0])
+        .filter(key => key !== 'distanceFromFace' && key !== '切羽からの距離' && 
+                (key.includes('変位') || key.includes('displacement') || 
+                 (key.match(/[ABC]/) && !key.includes('沈下') && !key.includes('settlement'))))
+        .map((key, index) => {
+          const colors = ["#3B82F6", "#F59E0B", "#10B981", "#8B5CF6"];
+          // Determine color based on A, B, C pattern
+          let colorIndex = index % colors.length;
+          if (key.includes('A')) colorIndex = 0;
+          else if (key.includes('B')) colorIndex = 1;
+          else if (key.includes('C')) colorIndex = 2;
+          
+          return {
+            dataKey: key,
+            stroke: colors[colorIndex],
+            name: key,
+            strokeDasharray: (key.includes('予測') || key.includes('prediction')) ? undefined : "5 5",
+          };
+        })
+    : [];
+
+  // Generate specific chart lines for settlement data (最終沈下量)
+  const settlementChartLines = predictionChartData.length > 0 
+    ? Object.keys(predictionChartData[0])
+        .filter(key => key !== 'distanceFromFace' && key !== '切羽からの距離' && 
+                (key.includes('沈下') || key.includes('settlement') || 
+                 (key.match(/[ABC]/) && (key.includes('沈下') || key.includes('settlement')))))
+        .map((key, index) => {
+          const colors = ["#3B82F6", "#F59E0B", "#10B981", "#8B5CF6"];
+          // Determine color based on settlement type (沈下量1, 沈下量2, 沈下量3)
+          let colorIndex = 0;
+          if (key.includes('沈下量1') || key.includes('settlement1')) colorIndex = 0;
+          else if (key.includes('沈下量2') || key.includes('settlement2')) colorIndex = 1;
+          else if (key.includes('沈下量3') || key.includes('settlement3')) colorIndex = 2;
+          else if (key.includes('1')) colorIndex = 0;
+          else if (key.includes('2')) colorIndex = 1;
+          else if (key.includes('3')) colorIndex = 2;
+          
+          return {
+            dataKey: key,
+            stroke: colors[colorIndex],
+            name: key,
+            strokeDasharray: (key.includes('予測') || key.includes('prediction')) ? undefined : "5 5",
           };
         })
     : [];
@@ -165,6 +251,8 @@ export function useSimulation() {
     simulationChartData,
     handleAnalyze,
     chartLines,
+    displacementChartLines,
+    settlementChartLines,
     analysisResult,
     error,
   };

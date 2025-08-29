@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { locationsAPI } from '@/lib/api/locations';
 import { useHeatmap } from './useHeatmap';
 
 interface ProcessEachResult {
@@ -157,6 +156,11 @@ export function useLearning() {
 
     try {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      
+      // AbortControllerを使用してタイムアウトを5分に設定
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5分
+      
       const response = await fetch(`${API_BASE_URL}/models/process-each`, {
         method: 'POST',
         headers: {
@@ -170,7 +174,10 @@ export function useLearning() {
           td: predictionTD,
           predict_final: true,
         }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       console.log('Response status:', response.status);
 

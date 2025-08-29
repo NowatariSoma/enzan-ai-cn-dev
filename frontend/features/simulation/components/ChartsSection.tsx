@@ -27,22 +27,13 @@ export function ChartsSection({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <PredictionChart
-            data={chartData}
-            title="変位量データ (A, B, C)"
-            xAxisLabel="切羽からの距離 (m)"
-            yAxisLabel="変位量 (mm)"
-            lines={chartLines}
-          />
-          <PredictionChart
-            data={chartData}
-            title="予測データ (A_prediction, B_prediction, C_prediction)"
-            xAxisLabel="切羽からの距離 (m)"
-            yAxisLabel="変位量 (mm)"
-            lines={chartLines}
-          />
-        </div>
+        <PredictionChart
+          data={chartData}
+          title={title}
+          xAxisLabel="切羽からの距離 (m)"
+          yAxisLabel="変位量 (mm)"
+          lines={chartLines}
+        />
       </CardContent>
     </Card>
   );

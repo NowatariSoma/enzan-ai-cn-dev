@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # データフォルダ設定（環境変数でオーバーライド可能）
     DATA_FOLDER: Path = Path(os.getenv("DATA_FOLDER", "/home/nowatari/repos/enzan-ai-cn-dev/data_folder"))
-    OUTPUT_FOLDER: Path = Path(os.getenv("OUTPUT_FOLDER", "/home/nowatari/repos/enzan-ai-cn-dev/microservices/ai_ameasure/output"))
+    OUTPUT_FOLDER: Path = Path(os.getenv("OUTPUT_FOLDER", "/home/nowatari/repos/enzan-ai-cn-dev/output"))
 
     # モデル設定
     MODELS_DIR: Path = (

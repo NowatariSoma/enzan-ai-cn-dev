@@ -7,11 +7,9 @@ interface PredictionDataTableProps {
   excavationAdvance: number;
   distanceFromFace: number;
   data: Array<{
-    step: number;
-    days: number;
-    prediction1: string;
-    prediction2: string;
-    prediction3: string;
+    切羽からの距離?: number;
+    distance_from_face?: number;
+    [key: string]: number;
   }>;
 }
 
@@ -20,12 +18,21 @@ export function PredictionDataTable({
   distanceFromFace,
   data,
 }: PredictionDataTableProps) {
-  const tableColumns = [
-    { key: "step" as const, header: "切羽からの距離" },
-    { key: "days" as const, header: "変位量A_prediction" },
-    { key: "prediction1" as const, header: "変位量B_prediction" },
-    { key: "prediction2" as const, header: "変位量C_prediction" },
-    { key: "prediction3" as const, header: "沈下量1_prediction" },
+  // Dynamically generate columns based on actual data
+  const tableColumns = data.length > 0 ? [
+    { 
+      key: (data[0].切羽からの距離 !== undefined ? "切羽からの距離" : "distance_from_face") as const, 
+      header: "切羽からの距離 (m)" 
+    },
+    ...Object.keys(data[0])
+      .filter(key => key !== 'distance_from_face' && key !== '切羽からの距離')
+      .slice(0, 6) // Limit to first 6 columns for readability
+      .map(key => ({
+        key: key as const,
+        header: key.replace('_', ' '),
+      }))
+  ] : [
+    { key: "distance_from_face" as const, header: "切羽からの距離 (m)" },
   ];
 
   return (

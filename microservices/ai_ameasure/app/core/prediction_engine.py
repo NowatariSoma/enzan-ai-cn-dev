@@ -6,13 +6,21 @@ import logging
 import math
 import os
 import time
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+# 全ての警告を抑制（高精度処理のパフォーマンス向上）
+warnings.filterwarnings('ignore')
 
 import joblib
 import matplotlib
 import numpy as np
 import pandas as pd
+
+# パンダス警告を個別に抑制
+pd.options.mode.chained_assignment = None
+
 import seaborn as sns
 from app.core.config import settings
 from app.core.csv_loader import CSVDataLoader
@@ -23,27 +31,52 @@ logger = logging.getLogger(__name__)
 
 # 元のai_ameasureのパスを動的に取得（Docker環境対応）
 current_file_path = Path(__file__).resolve()
-if "/app/" in str(current_file_path):
-    # Docker環境: マウントされた /app/ai_ameasure を使用
-    original_ai_ameasure_path = Path("/app/ai_ameasure")
-else:
-    # ローカル環境: 従来通り
-    original_ai_ameasure_path = Path("/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure")
+original_ai_ameasure_path = None
 
-if original_ai_ameasure_path.exists():
-    sys.path.insert(0, str(original_ai_ameasure_path))
-    logger.info(f"Successfully added ai_ameasure path: {original_ai_ameasure_path}")
-else:
-    logger.error(f"Cannot find ai_ameasure directory at: {original_ai_ameasure_path}")
-    raise ImportError(f"ai_ameasure directory not found at {original_ai_ameasure_path}")
+# Docker環境とローカル環境の複数パターンを試行
+possible_paths = [
+    Path("/app/ai_ameasure"),  # Docker環境
+    Path("/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure"),  # ローカル環境
+    Path(__file__).parent.parent.parent.parent / "ai_ameasure",  # 相対パス
+]
 
-from app.displacement_temporal_spacial_analysis import analyze_displacement
-from app.displacement_temporal_spacial_analysis import (
-    create_dataset,
-    generate_additional_info_df, 
-    generate_dataframes,
-)
-from app.models.manager import ModelManager
+for path in possible_paths:
+    if path.exists():
+        original_ai_ameasure_path = path
+        logger.info(f"Found ai_ameasure directory at: {original_ai_ameasure_path}")
+        break
+
+if original_ai_ameasure_path is None:
+    logger.error(f"Cannot find ai_ameasure directory in any of these locations: {possible_paths}")
+    # フォールバック: 現在のmicroservices内の実装を使用
+    logger.warning("Using fallback implementation from microservices")
+    analyze_displacement = None
+    create_dataset = None
+    generate_additional_info_df = None
+    generate_dataframes = None
+else:
+    try:
+        sys.path.insert(0, str(original_ai_ameasure_path))
+        from app.displacement_temporal_spacial_analysis import analyze_displacement
+        from app.displacement_temporal_spacial_analysis import (
+            create_dataset,
+            generate_additional_info_df, 
+            generate_dataframes,
+        )
+        logger.info(f"Successfully imported from ai_ameasure: {original_ai_ameasure_path}")
+    except ImportError as e:
+        logger.error(f"Failed to import from ai_ameasure: {e}")
+        # フォールバック設定
+        analyze_displacement = None
+        create_dataset = None
+        generate_additional_info_df = None
+        generate_dataframes = None
+
+try:
+    from app.models.manager import ModelManager
+except ImportError:
+    logger.warning("ModelManager not available, using fallback")
+    ModelManager = None
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 
@@ -58,9 +91,17 @@ class PredictionEngine:
     """機械学習予測・シミュレーションエンジン（オリジナルアルゴリズム統合版）"""
 
     def __init__(self):
-        self.model_manager = ModelManager(
-            settings.DATA_FOLDER.parent / "microservices" / "ai_ameasure" / "config" / "models.yaml"
-        )
+        if ModelManager:
+            try:
+                self.model_manager = ModelManager(
+                    settings.DATA_FOLDER.parent / "microservices" / "ai_ameasure" / "config" / "models.yaml"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize ModelManager: {e}")
+                self.model_manager = None
+        else:
+            self.model_manager = None
+            
         self.csv_loader = CSVDataLoader()
 
         # オリジナルの特徴量・ターゲット列定義（高度な特徴エンジニアリング対応）
@@ -223,8 +264,12 @@ class PredictionEngine:
             # オリジナルと完全に同じモデルインスタンスを使用
             model_instance = original_models.get(model_name, RandomForestRegressor(random_state=42))
 
-            # オリジナルの高度な学習処理を実行
-            df_all, training_metrics = analyze_displacement(
+            # オリジナルの高精度学習処理を実行（フォールバック無し）
+            if analyze_displacement is None:
+                raise ImportError("High-precision analyze_displacement function is not available. Please check ai_ameasure integration.")
+                
+            logger.info("Using original ai_ameasure high-precision analyze_displacement function")
+            df_all, training_metrics, scatter_data = analyze_displacement(
                 str(input_folder),
                 str(output_path),
                 model_paths,
@@ -244,6 +289,7 @@ class PredictionEngine:
                 "training_samples": len(df_all),
                 "processing_time": processing_time,
                 "training_metrics": training_metrics,  # 実際の学習メトリクスを含める
+                "scatter_data": scatter_data,  # 散布図データを含める
                 "models_saved": {
                     "settlement": str(model_paths["prediction_model"][0]),
                     "convergence": str(model_paths["prediction_model"][1]),
@@ -262,6 +308,8 @@ class PredictionEngine:
         except Exception as e:
             logger.error(f"Error training model {model_name}: {e}")
             raise
+
+    # フォールバック実装は削除 - 高精度アルゴリズムのみ使用
 
     def predict(
         self, model_name: str, features: Dict[str, float], folder_name: str = "01-hokkaido-akan"

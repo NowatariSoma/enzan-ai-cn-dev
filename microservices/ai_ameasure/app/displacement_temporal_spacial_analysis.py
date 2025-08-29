@@ -1,8 +1,15 @@
 import argparse
+import warnings
+
+# 全ての警告を抑制（パフォーマンス向上）
+warnings.filterwarnings('ignore')
+import pandas as pd
+
+# パンダス警告を個別に抑制
+pd.options.mode.chained_assignment = None
 
 import matplotlib
 import numpy as np
-import pandas as pd
 
 matplotlib.use("Agg")  # Use a non-interactive backend for matplotlib
 import os

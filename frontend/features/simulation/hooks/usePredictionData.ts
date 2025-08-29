@@ -1,20 +1,42 @@
 import { useMemo } from "react";
 
-export function usePredictionData(excavationAdvance: number, distanceFromFace: number) {
+interface PredictionDataPoint {
+  step: number;
+  days: number;
+  distanceFromFace: number;
+  [key: string]: number; // For dynamic displacement columns from API
+}
+
+export function usePredictionData(
+  excavationAdvance: number, 
+  distanceFromFace: number, 
+  apiData?: Array<{切羽からの距離: number; [key: string]: number}>
+) {
   const predictionData = useMemo(() => {
-    const data = [];
-    for (let i = 0; i <= 6; i++) {
-      const days = i === 0 ? 0 : Math.round(i * 5.2125);
-      data.push({
-        step: i,
-        days: days,
-        prediction1: (Math.random() * 2 - 1).toFixed(3),
-        prediction2: (Math.random() * 0.5 - 0.25).toFixed(3),
-        prediction3: (Math.random() * 3 - 1.5).toFixed(3),
-      });
+    if (apiData && apiData.length > 0) {
+      // Use real API data when available
+      return apiData.map((point, index) => {
+        const days = index === 0 ? 0 : Math.round((point.切羽からの距離 - distanceFromFace) / excavationAdvance);
+        const result: PredictionDataPoint = {
+          step: index,
+          days: Math.max(0, days),
+          distanceFromFace: point.切羽からの距離,
+        };
+        
+        // Add all displacement columns from API data
+        Object.keys(point).forEach(key => {
+          if (key !== '切羽からの距離') {
+            result[key] = point[key];
+          }
+        });
+        
+        return result;
+      }).slice(0, 20); // Limit to first 20 points for table display
     }
-    return data;
-  }, [excavationAdvance, distanceFromFace]);
+
+    // Return empty array when no API data is available
+    return [];
+  }, [excavationAdvance, distanceFromFace, apiData]);
 
   return { predictionData };
 }
