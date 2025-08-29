@@ -150,9 +150,48 @@ export function useSimulation() {
       const simulationData = processSimulationData(result);
       const predictionData = processPredictionData(result);
       
+      // Create combined data for simulation charts: actual measurements from prediction + simulation predictions
+      // Use all data points from both prediction and simulation data
+      const allDistances = new Set([
+        ...predictionData.map(p => p.distanceFromFace),
+        ...simulationData.map(s => s.distanceFromFace)
+      ]);
+      
+      const combinedSimulationData = Array.from(allDistances)
+        .sort((a, b) => a - b)
+        .map(distance => {
+          const predPoint = predictionData.find(p => p.distanceFromFace === distance);
+          const simPoint = simulationData.find(s => s.distanceFromFace === distance);
+          
+          const combined: any = {
+            distanceFromFace: distance,
+          };
+          
+          // Add actual measurements from prediction data if available
+          if (predPoint) {
+            Object.keys(predPoint).forEach(key => {
+              if (key !== 'distanceFromFace' && !key.includes('予測') && !key.includes('prediction')) {
+                combined[key] = predPoint[key];
+              }
+            });
+          }
+          
+          // Add prediction values - prefer simulation data, fallback to prediction data
+          const sourcePoint = simPoint || predPoint;
+          if (sourcePoint) {
+            Object.keys(sourcePoint).forEach(key => {
+              if (key !== 'distanceFromFace' && (key.includes('予測') || key.includes('prediction'))) {
+                combined[key] = sourcePoint[key];
+              }
+            });
+          }
+          
+          return combined;
+        });
+      
       setChartData(simulationData);
       setPredictionChartData(predictionData);
-      setSimulationChartData(simulationData);
+      setSimulationChartData(combinedSimulationData);
       
     } catch (err) {
       console.error('Analysis failed:', err);

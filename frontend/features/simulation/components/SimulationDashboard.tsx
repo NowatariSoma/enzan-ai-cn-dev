@@ -202,12 +202,12 @@ export function SimulationDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ChartsSection
               title={`最終変位量シミュレーション（実測+予測） (${excavationAdvance} m/day)`}
-              chartData={predictionChartData}
+              chartData={simulationChartData}
               chartLines={displacementChartLines}
             />
             <ChartsSection
               title={`最終沈下量シミュレーション（実測+予測） (${excavationAdvance} m/day)`}
-              chartData={predictionChartData}
+              chartData={simulationChartData}
               chartLines={settlementChartLines}
             />
           </div>

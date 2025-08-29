@@ -268,28 +268,39 @@ async def analyze_local_displacement_gui_style(
             output_folder, f"convergence_simulation_{cycle_no}.png"
         )
 
+        # For simulation charts, use actual measurement data up to distance_from_face
+        # and simulated prediction data for the rest
+        df_measured = df_all_prediction[df_all_prediction[DISTANCE_FROM_FACE] <= distance_from_face]
+        df_simulated_full = df_all_simulated  # This contains all data including simulated extension
+
         draw_local_prediction_chart(
             settlement_simulation_path,
-            df_all_prediction[DISTANCE_FROM_FACE],
-            df_all_prediction[settlements],
-            df_all_simulated[DISTANCE_FROM_FACE],
-            df_all_simulated[[l + "_prediction" for l in settlements]],
-            f"最終沈下量予測 for Cycle {cycle_no} (TD: {td})",
+            df_measured[DISTANCE_FROM_FACE],
+            df_measured[settlements],
+            df_simulated_full[DISTANCE_FROM_FACE],
+            df_simulated_full[[l + "_prediction" for l in settlements]],
+            f"最終沈下量シミュレーション for Cycle {cycle_no} (TD: {td})",
         )
 
         draw_local_prediction_chart(
             convergence_simulation_path,
-            df_all_prediction[DISTANCE_FROM_FACE],
-            df_all_prediction[convergences],
-            df_all_simulated[DISTANCE_FROM_FACE],
-            df_all_simulated[[l + "_prediction" for l in convergences]],
-            f"最終変位量予測 for Cycle {cycle_no} (TD: {td})",
+            df_measured[DISTANCE_FROM_FACE],
+            df_measured[convergences],
+            df_simulated_full[DISTANCE_FROM_FACE],
+            df_simulated_full[[l + "_prediction" for l in convergences]],
+            f"最終変位量シミュレーション for Cycle {cycle_no} (TD: {td})",
         )
 
-        # Prepare response data
-        simulation_data_df = df_all_simulated[
-            [DISTANCE_FROM_FACE] + [l + "_prediction" for l in convergences + settlements]
-        ]
+        # Prepare response data - only prediction columns for table
+        prediction_cols = [DISTANCE_FROM_FACE]
+        
+        # Add only prediction columns
+        for col in settlements + convergences:
+            pred_col = col + "_prediction"
+            if pred_col in df_all_simulated.columns:
+                prediction_cols.append(pred_col)
+        
+        simulation_data_df = df_all_simulated[prediction_cols]
         simulation_data_records = simulation_data_df.to_dict(orient="records")
         
         # Prepare prediction data (actual measurements + predictions for charts)
