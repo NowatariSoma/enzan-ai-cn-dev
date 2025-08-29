@@ -8,16 +8,6 @@ import joblib
 import pandas as pd
 from app.core.config import settings
 from app.displacement import DURATION_DAYS
-# StreamlitのGUI実装を使用するため、以下をコメントアウト
-# from app.displacement_temporal_spacial_analysis import (
-#     DATE,
-#     DISTANCE_FROM_FACE,
-#     STA,
-#     TD_NO,
-#     create_dataset,
-#     generate_additional_info_df,
-#     generate_dataframes,
-# )
 
 # 代わりにGUI実装からインポート（作業ディレクトリ変更後）
 from app.schemas import simulation as schemas
@@ -162,22 +152,6 @@ async def analyze_local_displacement_gui_style(
     Returns:
         Dictionary containing prediction results, simulation results, and chart paths
     """
-    import json
-    
-    # リクエスト情報をコンソールに出力
-    print("\n" + "="*60)
-    print("📡 LOCAL DISPLACEMENT API REQUEST")
-    print("="*60)
-    print(f"🔹 Request received at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🔹 Folder Name: {request.folder_name}")
-    print(f"🔹 AMeasure File: {request.ameasure_file}")
-    print(f"🔹 Distance From Face: {request.distance_from_face}")
-    print(f"🔹 Daily Advance: {request.daily_advance}")
-    print(f"🔹 Max Distance From Face: {request.max_distance_from_face}")
-    print(f"🔹 Full Request JSON:")
-    print(json.dumps(request.dict(), indent=2, ensure_ascii=False))
-    print("="*60)
-    
     try:
         # Extract parameters from request
         folder_name = request.folder_name
@@ -220,14 +194,7 @@ async def analyze_local_displacement_gui_style(
                 distance_from_face,
                 recursive=True,
             )
-            
-            # Debug: Print simulation data info
-            print(f"🔍 DEBUG - df_all_simulated shape: {df_all_simulated.shape}")
-            print(f"🔍 DEBUG - df_all_simulated columns: {list(df_all_simulated.columns)}")
-            if not df_all_simulated.empty:
-                print(f"🔍 DEBUG - Distance range: {df_all_simulated[DISTANCE_FROM_FACE].min()} to {df_all_simulated[DISTANCE_FROM_FACE].max()}")
-                print(f"🔍 DEBUG - First few distances: {df_all_simulated[DISTANCE_FROM_FACE].head().tolist()}")
-                print(f"🔍 DEBUG - Last few distances: {df_all_simulated[DISTANCE_FROM_FACE].tail().tolist()}")
+        
         finally:
             # 環境を復元
             restore_environment(original_cwd)
@@ -235,90 +202,53 @@ async def analyze_local_displacement_gui_style(
         td = float(df_all_prediction[TD_NO].values[0])
         cycle_no = float(os.path.basename(a_measure_path).split("_")[2].split(".")[0])
 
-        # Generate prediction charts using SIMULATED data (same as table data)
-        settlement_prediction_path = os.path.join(
-            output_folder, f"settlement_prediction_{cycle_no}.png"
-        )
-        convergence_prediction_path = os.path.join(
-            output_folder, f"convergence_prediction_{cycle_no}.png"
-        )
-
-        # Use simulated data for prediction charts to match table data
-        draw_local_prediction_chart(
-            settlement_prediction_path,
-            df_all_prediction[DISTANCE_FROM_FACE],
-            df_all_prediction[settlements],
-            df_all_simulated[DISTANCE_FROM_FACE],
-            df_all_simulated[[l + "_prediction" for l in settlements]],
-            f"最終沈下量予測 for Cycle {cycle_no} (TD: {td})",
-        )
-
-        draw_local_prediction_chart(
-            convergence_prediction_path,
-            df_all_prediction[DISTANCE_FROM_FACE],
-            df_all_prediction[convergences],
-            df_all_simulated[DISTANCE_FROM_FACE],
-            df_all_simulated[[l + "_prediction" for l in convergences]],
-            f"最終変位量予測 for Cycle {cycle_no} (TD: {td})",
-        )
-
         # Save simulation results to CSV
         simulation_csv_path = os.path.join(
             output_folder, f"{folder_name}_{os.path.basename(a_measure_path)}"
         )
         df_all_simulated.to_csv(simulation_csv_path, index=False)
 
-        # Generate simulation charts
-        settlement_simulation_path = os.path.join(
-            output_folder, f"settlement_simulation_{cycle_no}.png"
-        )
-        convergence_simulation_path = os.path.join(
-            output_folder, f"convergence_simulation_{cycle_no}.png"
-        )
-
-        # For simulation charts, use actual measurement data up to distance_from_face
-        # and simulated prediction data for the rest
-        df_measured = df_all_prediction[df_all_prediction[DISTANCE_FROM_FACE] <= distance_from_face]
-        df_simulated_full = df_all_simulated  # This contains all data including simulated extension
-
-        draw_local_prediction_chart(
-            settlement_simulation_path,
-            df_measured[DISTANCE_FROM_FACE],
-            df_measured[settlements],
-            df_simulated_full[DISTANCE_FROM_FACE],
-            df_simulated_full[[l + "_prediction" for l in settlements]],
-            f"最終沈下量シミュレーション for Cycle {cycle_no} (TD: {td})",
-        )
-
-        draw_local_prediction_chart(
-            convergence_simulation_path,
-            df_measured[DISTANCE_FROM_FACE],
-            df_measured[convergences],
-            df_simulated_full[DISTANCE_FROM_FACE],
-            df_simulated_full[[l + "_prediction" for l in convergences]],
-            f"最終変位量シミュレーション for Cycle {cycle_no} (TD: {td})",
-        )
-
-        # Prepare response data - only prediction columns for table
-        prediction_cols = [DISTANCE_FROM_FACE]
+        # Create combined simulation data: use simulated data as the base (it includes the recursive simulation)
+        # The simulated data already contains the extended simulation values
+        df_combined_simulation = df_all_simulated.copy()
         
-        # Add only prediction columns
+        if not df_all_simulated.empty:
+            distances = df_all_simulated[DISTANCE_FROM_FACE].tolist()
+            
+            # Check if we have data at or below distance_from_face
+            below_threshold = [d for d in distances if d <= distance_from_face]
+            above_threshold = [d for d in distances if d > distance_from_face]
+            
+            # If we don't have data at the exact distance_from_face, add it from prediction data
+            if not below_threshold and not df_all_prediction.empty:
+                # Find the closest point in prediction data
+                pred_distances = df_all_prediction[DISTANCE_FROM_FACE].tolist()
+                closest_distance = min(pred_distances, key=lambda x: abs(x - distance_from_face))
+                print(f"  - Adding closest prediction point at {closest_distance}m")
+                
+                closest_point = df_all_prediction[df_all_prediction[DISTANCE_FROM_FACE] == closest_distance].copy()
+                if not closest_point.empty:
+                    # Adjust the distance to match exactly
+                    closest_point.loc[:, DISTANCE_FROM_FACE] = distance_from_face
+                    df_combined_simulation = pd.concat([closest_point, df_combined_simulation], ignore_index=True)
+                    df_combined_simulation = df_combined_simulation.sort_values(DISTANCE_FROM_FACE).reset_index(drop=True)
+        
+        # Prepare columns for simulation data
+        simulation_cols = [DISTANCE_FROM_FACE]
+        
+        # Add actual measurement columns 
+        for col in settlements + convergences:
+            if col in df_combined_simulation.columns:
+                simulation_cols.append(col)
+        
+        # Add prediction columns
         for col in settlements + convergences:
             pred_col = col + "_prediction"
-            if pred_col in df_all_simulated.columns:
-                prediction_cols.append(pred_col)
+            if pred_col in df_combined_simulation.columns:
+                simulation_cols.append(pred_col)
         
-        simulation_data_df = df_all_simulated[prediction_cols]
+        simulation_data_df = df_combined_simulation[simulation_cols]
         simulation_data_records = simulation_data_df.to_dict(orient="records")
-        
-        # Debug: Print detailed info about simulation data
-        print(f"🔍 DEBUG - prediction_cols: {prediction_cols}")
-        print(f"🔍 DEBUG - simulation_data_df shape: {simulation_data_df.shape}")
-        print(f"🔍 DEBUG - simulation_data_records length: {len(simulation_data_records)}")
-        if simulation_data_records:
-            print(f"🔍 DEBUG - First simulation record: {simulation_data_records[0]}")
-            if len(simulation_data_records) > 1:
-                print(f"🔍 DEBUG - Last simulation record: {simulation_data_records[-1]}")
         
         # Prepare prediction data (actual measurements + predictions for charts)
         prediction_data_df = df_all_prediction[
@@ -326,71 +256,32 @@ async def analyze_local_displacement_gui_style(
         ]
         prediction_data_records = prediction_data_df.to_dict(orient="records")
         
+        # Prepare table data - only prediction columns for the data table
+        table_prediction_cols = [DISTANCE_FROM_FACE]
+        for col in settlements + convergences:
+            pred_col = col + "_prediction"
+            if pred_col in df_all_simulated.columns:
+                table_prediction_cols.append(pred_col)
+        
+        table_data_df = df_all_simulated[table_prediction_cols]
+        table_data_records = table_data_df.to_dict(orient="records")
+        
         response_data = {
             "folder_name": folder_name,
             "cycle_no": cycle_no,
             "td": td,
             "distance_from_face": distance_from_face,
             "daily_advance": daily_advance,
-            "prediction_charts": {
-                "settlement": settlement_prediction_path,
-                "convergence": convergence_prediction_path,
-            },
-            "simulation_charts": {
-                "settlement": settlement_simulation_path,
-                "convergence": convergence_simulation_path,
-            },
             "simulation_csv": simulation_csv_path,
             "simulation_data": simulation_data_records,
             "prediction_data": prediction_data_records,
+            "table_data": table_data_records,
             "timestamp": datetime.now().isoformat(),
         }
-
-        # レスポンス情報をコンソールに出力
-        print("\n" + "="*60)
-        print("📤 LOCAL DISPLACEMENT API RESPONSE")
-        print("="*60)
-        print(f"🔸 Response generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"🔸 Folder Name: {response_data['folder_name']}")
-        print(f"🔸 Cycle No: {response_data['cycle_no']}")
-        print(f"🔸 TD: {response_data['td']}")
-        print(f"🔸 Distance From Face: {response_data['distance_from_face']}")
-        print(f"🔸 Daily Advance: {response_data['daily_advance']}")
-        print(f"🔸 Timestamp: {response_data['timestamp']}")
-        print(f"🔸 Prediction Charts:")
-        print(f"   • Settlement: {response_data['prediction_charts']['settlement']}")
-        print(f"   • Convergence: {response_data['prediction_charts']['convergence']}")
-        print(f"🔸 Simulation Charts:")
-        print(f"   • Settlement: {response_data['simulation_charts']['settlement']}")
-        print(f"   • Convergence: {response_data['simulation_charts']['convergence']}")
-        print(f"🔸 Simulation CSV: {response_data['simulation_csv']}")
-        print(f"🔸 Simulation Data Points: {len(simulation_data_records)}")
         
-        if simulation_data_records:
-            print(f"🔸 Data Columns: {list(simulation_data_records[0].keys())}")
-            print(f"🔸 First 3 Data Points:")
-            for i, record in enumerate(simulation_data_records[:3]):
-                print(f"   [{i}]: {record}")
-        
-        print(f"🔸 Convergence Columns: {convergences}")
-        print(f"🔸 Settlement Columns: {settlements}")
-        print("="*60)
-
         return response_data
 
     except Exception as e:
-        # エラー情報をコンソールに出力
-        print("\n" + "="*60)
-        print("❌ LOCAL DISPLACEMENT API ERROR")
-        print("="*60)
-        print(f"🔴 Error occurred at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"🔴 Error type: {type(e).__name__}")
-        print(f"🔴 Error message: {str(e)}")
-        print(f"🔴 Request params: folder_name={request.folder_name}, ameasure_file={request.ameasure_file}")
-        import traceback
-        print(f"🔴 Stack trace:")
-        traceback.print_exc()
-        print("="*60)
         
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

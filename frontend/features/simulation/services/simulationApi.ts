@@ -36,6 +36,10 @@ export interface LocalDisplacementResponse {
     distance_from_face: number;
     [key: string]: number;
   }>;
+  table_data?: Array<{
+    distance_from_face: number;
+    [key: string]: number;
+  }>;
   timestamp: string;
 }
 

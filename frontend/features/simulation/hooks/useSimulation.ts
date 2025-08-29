@@ -18,7 +18,7 @@ export function useSimulation() {
   const [analysisResult, setAnalysisResult] = useState<LocalDisplacementResponse | null>(null);
   const [chartData, setChartData] = useState<any[]>([]);
   const [predictionChartData, setPredictionChartData] = useState<any[]>([]);
-  const [simulationChartData, setSimulationChartData] = useState<any[]>([]);
+  const [simulationChartData, setSimulationChartData] = useState<any>({});
   const [error, setError] = useState<string | null>(null);
 
   // Load folders on mount
@@ -157,48 +157,81 @@ export function useSimulation() {
         console.log('🔍 DEBUG - last simulationData:', simulationData[simulationData.length - 1]);
       }
       
-      // Create combined data for simulation charts: actual measurements from prediction + simulation predictions
-      // Use all data points from both prediction and simulation data
-      const allDistances = new Set([
-        ...predictionData.map(p => p.distanceFromFace),
-        ...simulationData.map(s => s.distanceFromFace)
-      ]);
+      // For simulation charts, we need both actual measurements and simulation predictions
+      // Create data series for MultiLineChart
+      console.log('🔍 DEBUG - predictionData columns:', Object.keys(predictionData[0] || {}));
+      console.log('🔍 DEBUG - simulationData columns:', Object.keys(simulationData[0] || {}));
       
-      const combinedSimulationData = Array.from(allDistances)
-        .sort((a, b) => a - b)
-        .map(distance => {
-          const predPoint = predictionData.find(p => p.distanceFromFace === distance);
-          const simPoint = simulationData.find(s => s.distanceFromFace === distance);
-          
-          const combined: any = {
-            distanceFromFace: distance,
-          };
-          
-          // Add actual measurements from prediction data if available
-          if (predPoint) {
-            Object.keys(predPoint).forEach(key => {
-              if (key !== 'distanceFromFace' && !key.includes('予測') && !key.includes('prediction')) {
-                combined[key] = predPoint[key];
-              }
-            });
-          }
-          
-          // Add prediction values - prefer simulation data, fallback to prediction data
-          const sourcePoint = simPoint || predPoint;
-          if (sourcePoint) {
-            Object.keys(sourcePoint).forEach(key => {
-              if (key !== 'distanceFromFace' && (key.includes('予測') || key.includes('prediction'))) {
-                combined[key] = sourcePoint[key];
-              }
-            });
-          }
-          
-          return combined;
-        });
+      const actualColumns = Object.keys(predictionData[0] || {}).filter(
+        key => key !== 'distanceFromFace' && key !== '切羽からの距離' && 
+               !key.includes('予測') && !key.includes('prediction')
+      );
       
+      const simulationColumns = Object.keys(simulationData[0] || {}).filter(
+        key => key !== 'distanceFromFace' && key !== '切羽からの距離' &&
+               (key.includes('予測') || key.includes('prediction'))
+      );
+      
+      console.log('🔍 DEBUG - actualColumns:', actualColumns);
+      console.log('🔍 DEBUG - simulationColumns:', simulationColumns);
+
+      // Create separate data series for displacement and settlement
+      const displacementColumns = actualColumns.filter(col => 
+        col.includes('変位') || col.includes('displacement') || 
+        (col.match(/[ABC]/) && !col.includes('沈下') && !col.includes('settlement'))
+      );
+      
+      const settlementColumns = actualColumns.filter(col => 
+        col.includes('沈下') || col.includes('settlement')
+      );
+      
+      const displacementPredictionColumns = simulationColumns.filter(col => 
+        col.includes('変位') || col.includes('displacement') || 
+        (col.match(/[ABC]/) && !col.includes('沈下') && !col.includes('settlement'))
+      );
+      
+      const settlementPredictionColumns = simulationColumns.filter(col => 
+        col.includes('沈下') || col.includes('settlement')
+      );
+
+      const displacementDataSeries = [
+        {
+          name: "実測",
+          data: predictionData,
+          color: "#3B82F6",
+          strokeDasharray: "5 5",
+          columns: displacementColumns
+        },
+        {
+          name: "予測",
+          data: simulationData,
+          color: "#F59E0B",
+          columns: displacementPredictionColumns
+        }
+      ];
+
+      const settlementDataSeries = [
+        {
+          name: "実測",
+          data: predictionData,
+          color: "#3B82F6",
+          strokeDasharray: "5 5",
+          columns: settlementColumns
+        },
+        {
+          name: "予測",
+          data: simulationData,
+          color: "#F59E0B",
+          columns: settlementPredictionColumns
+        }
+      ];
+
       setChartData(simulationData);
       setPredictionChartData(predictionData);
-      setSimulationChartData(combinedSimulationData);
+      setSimulationChartData({
+        displacement: displacementDataSeries,
+        settlement: settlementDataSeries
+      });
       
     } catch (err) {
       console.error('Analysis failed:', err);
@@ -230,7 +263,7 @@ export function useSimulation() {
         })
     : [];
 
-  // Generate specific chart lines for displacement data (最終変位量)
+  // Generate specific chart lines for displacement data (最終変位量) - use simulationChartData for simulation charts
   const displacementChartLines = predictionChartData.length > 0 
     ? Object.keys(predictionChartData[0])
         .filter(key => key !== 'distanceFromFace' && key !== '切羽からの距離' && 
@@ -249,6 +282,33 @@ export function useSimulation() {
             stroke: colors[colorIndex],
             name: key,
             strokeDasharray: (key.includes('予測') || key.includes('prediction')) ? undefined : "5 5",
+          };
+        })
+    : [];
+
+  // Generate chart lines for displacement simulation data - separate lines for actual and simulation data
+  const simulationDisplacementChartLines = simulationChartData.length > 0 
+    ? Object.keys(simulationChartData[0])
+        .filter(key => key !== 'distanceFromFace' && key !== '切羽からの距離' &&
+                (key.includes('変位') || key.includes('displacement') || 
+                 (key.match(/[ABC]/) && !key.includes('沈下') && !key.includes('settlement'))))
+        .map((key) => {
+          const colors = ["#3B82F6", "#F59E0B", "#10B981", "#8B5CF6"];
+          // Determine color based on A, B, C pattern
+          let colorIndex = 0;
+          if (key.includes('A')) colorIndex = 0;
+          else if (key.includes('B')) colorIndex = 1;
+          else if (key.includes('C')) colorIndex = 2;
+          
+          // Different styling for actual measurements vs simulation predictions
+          const isSimulation = key.includes('_sim');
+          const displayName = key.replace('_sim', '') + (isSimulation ? ' (シミュレーション)' : ' (実測)');
+          
+          return {
+            dataKey: key,
+            stroke: colors[colorIndex],
+            name: displayName,
+            strokeDasharray: isSimulation ? undefined : "5 5", // Solid line for simulation, dashed for actual
           };
         })
     : [];
@@ -279,6 +339,36 @@ export function useSimulation() {
         })
     : [];
 
+  // Generate chart lines for settlement simulation data - separate lines for actual and simulation data
+  const simulationSettlementChartLines = simulationChartData.length > 0 
+    ? Object.keys(simulationChartData[0])
+        .filter(key => key !== 'distanceFromFace' && key !== '切羽からの距離' &&
+                (key.includes('沈下') || key.includes('settlement') || 
+                 (key.match(/[ABC]/) && (key.includes('沈下') || key.includes('settlement')))))
+        .map((key) => {
+          const colors = ["#3B82F6", "#F59E0B", "#10B981", "#8B5CF6"];
+          // Determine color based on settlement type (沈下量1, 沈下量2, 沈下量3)
+          let colorIndex = 0;
+          if (key.includes('沈下量1') || key.includes('settlement1')) colorIndex = 0;
+          else if (key.includes('沈下量2') || key.includes('settlement2')) colorIndex = 1;
+          else if (key.includes('沈下量3') || key.includes('settlement3')) colorIndex = 2;
+          else if (key.includes('1')) colorIndex = 0;
+          else if (key.includes('2')) colorIndex = 1;
+          else if (key.includes('3')) colorIndex = 2;
+          
+          // Different styling for actual measurements vs simulation predictions
+          const isSimulation = key.includes('_sim');
+          const displayName = key.replace('_sim', '') + (isSimulation ? ' (シミュレーション)' : ' (実測)');
+          
+          return {
+            dataKey: key,
+            stroke: colors[colorIndex],
+            name: displayName,
+            strokeDasharray: isSimulation ? undefined : "5 5", // Solid line for simulation, dashed for actual
+          };
+        })
+    : [];
+
   return {
     folders,
     selectedFolder,
@@ -299,6 +389,8 @@ export function useSimulation() {
     chartLines,
     displacementChartLines,
     settlementChartLines,
+    simulationDisplacementChartLines,
+    simulationSettlementChartLines,
     analysisResult,
     error,
   };

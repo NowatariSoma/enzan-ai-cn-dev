@@ -37,6 +37,8 @@ export function SimulationDashboard() {
     chartLines,
     displacementChartLines,
     settlementChartLines,
+    simulationDisplacementChartLines,
+    simulationSettlementChartLines,
     analysisResult,
     error
   } = useSimulation();
@@ -204,21 +206,19 @@ export function SimulationDashboard() {
             />
           </div>
 
-          {/* Simulation Charts */}
+          {/* Real Data vs Simulation Prediction Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ChartsSection
-              title={`最終変位量シミュレーション（実測+予測） (${excavationAdvance} m/day)`}
-              chartData={simulationChartData}
-              chartLines={displacementChartLines}
+              title={`変位量（実測 vs シミュレーション） - Cycle ${analysisResult.cycle_no}`}
+              dataSeries={simulationChartData.displacement}
             />
             <ChartsSection
-              title={`最終沈下量シミュレーション（実測+予測） (${excavationAdvance} m/day)`}
-              chartData={simulationChartData}
-              chartLines={settlementChartLines}
+              title={`沈下量（実測 vs シミュレーション） - Cycle ${analysisResult.cycle_no}`}
+              dataSeries={simulationChartData.settlement}
             />
           </div>
 
-          {/* Prediction Data Table */}
+          {/* Simulation Data Table */}
           <PredictionDataTable
             excavationAdvance={excavationAdvance}
             distanceFromFace={distanceFromFace}
