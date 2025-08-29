@@ -7,8 +7,7 @@ interface PredictionDataTableProps {
   excavationAdvance: number;
   distanceFromFace: number;
   data: Array<{
-    切羽からの距離?: number;
-    distance_from_face?: number;
+    distance_from_face: number;
     [key: string]: number;
   }>;
 }
@@ -18,21 +17,25 @@ export function PredictionDataTable({
   distanceFromFace,
   data,
 }: PredictionDataTableProps) {
-  // Dynamically generate columns based on actual data
-  const tableColumns = data.length > 0 ? [
-    { 
-      key: (data[0].切羽からの距離 !== undefined ? "切羽からの距離" : "distance_from_face") as const, 
-      header: "切羽からの距離 (m)" 
-    },
-    ...Object.keys(data[0])
-      .filter(key => key !== 'distance_from_face' && key !== '切羽からの距離')
+  // Normalize data - convert Japanese key to English key if it exists
+  const normalizedData = data.map(item => {
+    const normalized = { ...item };
+    if ('切羽からの距離' in item && !('distance_from_face' in item)) {
+      normalized.distance_from_face = item['切羽からの距離'];
+      delete normalized['切羽からの距離'];
+    }
+    return normalized;
+  });
+  // Fixed columns to match learning page format
+  const tableColumns = [
+    { key: "distance_from_face" as const, header: "切羽からの距離 (m)" },
+    ...(normalizedData.length > 0 ? Object.keys(normalizedData[0])
+      .filter(key => key !== 'distance_from_face' && key !== '切羽からの距離' && key !== 'distanceFromFace')
       .slice(0, 6) // Limit to first 6 columns for readability
       .map(key => ({
         key: key as const,
         header: key.replace('_', ' '),
-      }))
-  ] : [
-    { key: "distance_from_face" as const, header: "切羽からの距離 (m)" },
+      })) : [])
   ];
 
   return (
@@ -45,7 +48,7 @@ export function PredictionDataTable({
       <CardContent>
         <div className="space-y-4">
           <DataTable
-            data={data}
+            data={normalizedData}
             columns={tableColumns}
             itemsPerPage={8}
           />
