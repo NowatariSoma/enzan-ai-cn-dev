@@ -79,12 +79,12 @@ export function useSimulation() {
     // Process the simulation data for charts
     const processedData = data.simulation_data.map(point => {
       const processed: any = {
-        distanceFromFace: point.distance_from_face,
+        distanceFromFace: point.distance_from_face || point['切羽からの距離'],
       };
       
       // Extract all the displacement and prediction columns
       Object.keys(point).forEach(key => {
-        if (key !== 'distance_from_face') {
+        if (key !== 'distance_from_face' && key !== '切羽からの距離') {
           // Convert column names to more readable format
           const displayKey = key.replace('_prediction', '予測');
           processed[displayKey] = point[key];
@@ -105,12 +105,12 @@ export function useSimulation() {
     
     const processedData = data.prediction_data.map(point => {
       const processed: any = {
-        distanceFromFace: point.distance_from_face,
+        distanceFromFace: point.distance_from_face || point['切羽からの距離'],
       };
       
       // Extract all columns (actual measurements and predictions)
       Object.keys(point).forEach(key => {
-        if (key !== 'distance_from_face') {
+        if (key !== 'distance_from_face' && key !== '切羽からの距離') {
           // Convert column names to more readable format
           let displayKey = key;
           if (key.includes('_prediction')) {
@@ -149,6 +149,13 @@ export function useSimulation() {
       // Process and set chart data
       const simulationData = processSimulationData(result);
       const predictionData = processPredictionData(result);
+      
+      console.log('🔍 DEBUG - simulationData length:', simulationData.length);
+      console.log('🔍 DEBUG - predictionData length:', predictionData.length);
+      if (simulationData.length > 0) {
+        console.log('🔍 DEBUG - first simulationData:', simulationData[0]);
+        console.log('🔍 DEBUG - last simulationData:', simulationData[simulationData.length - 1]);
+      }
       
       // Create combined data for simulation charts: actual measurements from prediction + simulation predictions
       // Use all data points from both prediction and simulation data

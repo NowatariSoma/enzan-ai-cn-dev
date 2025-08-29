@@ -20,7 +20,7 @@ export function PredictionDataTable({
   // Normalize data - convert Japanese key to English key if it exists
   const normalizedData = data.map(item => {
     const normalized = { ...item };
-    if ('切羽からの距離' in item && !('distance_from_face' in item)) {
+    if ('切羽からの距離' in item) {
       normalized.distance_from_face = item['切羽からの距離'];
       delete normalized['切羽からの距離'];
     }

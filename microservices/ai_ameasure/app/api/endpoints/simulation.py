@@ -220,6 +220,14 @@ async def analyze_local_displacement_gui_style(
                 distance_from_face,
                 recursive=True,
             )
+            
+            # Debug: Print simulation data info
+            print(f"🔍 DEBUG - df_all_simulated shape: {df_all_simulated.shape}")
+            print(f"🔍 DEBUG - df_all_simulated columns: {list(df_all_simulated.columns)}")
+            if not df_all_simulated.empty:
+                print(f"🔍 DEBUG - Distance range: {df_all_simulated[DISTANCE_FROM_FACE].min()} to {df_all_simulated[DISTANCE_FROM_FACE].max()}")
+                print(f"🔍 DEBUG - First few distances: {df_all_simulated[DISTANCE_FROM_FACE].head().tolist()}")
+                print(f"🔍 DEBUG - Last few distances: {df_all_simulated[DISTANCE_FROM_FACE].tail().tolist()}")
         finally:
             # 環境を復元
             restore_environment(original_cwd)
@@ -302,6 +310,15 @@ async def analyze_local_displacement_gui_style(
         
         simulation_data_df = df_all_simulated[prediction_cols]
         simulation_data_records = simulation_data_df.to_dict(orient="records")
+        
+        # Debug: Print detailed info about simulation data
+        print(f"🔍 DEBUG - prediction_cols: {prediction_cols}")
+        print(f"🔍 DEBUG - simulation_data_df shape: {simulation_data_df.shape}")
+        print(f"🔍 DEBUG - simulation_data_records length: {len(simulation_data_records)}")
+        if simulation_data_records:
+            print(f"🔍 DEBUG - First simulation record: {simulation_data_records[0]}")
+            if len(simulation_data_records) > 1:
+                print(f"🔍 DEBUG - Last simulation record: {simulation_data_records[-1]}")
         
         # Prepare prediction data (actual measurements + predictions for charts)
         prediction_data_df = df_all_prediction[

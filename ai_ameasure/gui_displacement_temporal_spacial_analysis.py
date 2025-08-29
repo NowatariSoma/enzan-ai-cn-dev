@@ -70,7 +70,16 @@ def simulate_displacement(input_folder, a_measure_path, max_distance_from_face, 
     df_all, _, _, _, settlements, convergences = generate_dataframes([a_measure_path], max_distance_from_face)
     if daily_advance and distance_from_face:
         # Create a new dataframe with the specified length and interval
-        max_record = math.ceil(min(max_distance_from_face / daily_advance, DURATION_DAYS))
+        remaining_distance = max_distance_from_face - distance_from_face
+        max_record = math.ceil(min(remaining_distance / daily_advance, DURATION_DAYS))
+        max_record = max(max_record, 1)  # Ensure at least 1 record
+        
+        print(f"🔍 SIMULATION DEBUG:")
+        print(f"  - distance_from_face: {distance_from_face}")
+        print(f"  - max_distance_from_face: {max_distance_from_face}")
+        print(f"  - daily_advance: {daily_advance}")
+        print(f"  - remaining_distance: {remaining_distance}")
+        print(f"  - max_record: {max_record}")
         df_all_actual = df_all[df_all[DISTANCE_FROM_FACE] < distance_from_face]
         if df_all_actual.empty:
             df_all_new = pd.DataFrame([df_all.iloc[0]] * max_record).reset_index()
@@ -78,8 +87,8 @@ def simulate_displacement(input_folder, a_measure_path, max_distance_from_face, 
             df_all_new = pd.DataFrame([df_all_actual.iloc[-1]] * max_record).reset_index()
         df_all_new[DATE] = pd.to_datetime(df_all.iloc[0][DATE]) + pd.to_timedelta(range(max_record), unit='D')
 
-        df_all_new[DISTANCE_FROM_FACE] = df_all.iloc[0][DISTANCE_FROM_FACE] + daily_advance * pd.Series(range(max_record))
-        df_all = pd.concat([df_all_actual, df_all_new[distance_from_face <= df_all_new[DISTANCE_FROM_FACE]]], ignore_index=True).reset_index()
+        df_all_new[DISTANCE_FROM_FACE] = distance_from_face + daily_advance * pd.Series(range(max_record))
+        df_all = pd.concat([df_all_actual, df_all_new[df_all_new[DISTANCE_FROM_FACE] >= distance_from_face]], ignore_index=True).reset_index()
 
     settlement_data, convergence_data = create_dataset(df_all, df_additional_info)
 

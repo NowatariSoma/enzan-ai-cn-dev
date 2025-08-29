@@ -43,6 +43,12 @@ export function SimulationDashboard() {
 
   const { predictionData } = usePredictionData(excavationAdvance, distanceFromFace, analysisResult?.simulation_data);
 
+  // Debug log for simulation data
+  if (analysisResult?.simulation_data) {
+    console.log('Simulation data length:', analysisResult.simulation_data.length);
+    console.log('First few simulation data points:', analysisResult.simulation_data.slice(0, 5));
+  }
+
 
   return (
     <div className="space-y-6">
