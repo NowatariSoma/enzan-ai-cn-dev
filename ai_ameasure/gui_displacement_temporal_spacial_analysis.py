@@ -23,8 +23,29 @@ models = {
     "HistGradientBoostingRegressor": HistGradientBoostingRegressor(random_state=42),
     "MLP":  MLPRegressor(hidden_layer_sizes=(100, 100, 50), max_iter=1000, random_state=42),
 }
-with open('config.json', 'r') as f:
-    config = json.load(f)
+# config.jsonのパスを動的に決定
+config_paths = [
+    'config.json',  # 現在のディレクトリ
+    '/app/config.json',  # Dockerコンテナ内
+    os.path.join(os.path.dirname(__file__), 'config.json'),  # このスクリプトと同じディレクトリ
+]
+
+config = None
+for config_path in config_paths:
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        break
+    except FileNotFoundError:
+        continue
+
+if config is None:
+    # デフォルト設定を使用
+    config = {
+        "selected_index": 0,
+        "selected_folder": "",
+        "input_folder": "/app/data"
+    }
 
 # Define the input folder
 INPUT_FOLDER = config['input_folder']
@@ -109,108 +130,111 @@ def simulate_displacement(input_folder, a_measure_path, max_distance_from_face, 
             
     return df_all, settlements, convergences
 
-# Streamlit app
-st.header("Select Folders from Input Directory")
-# Dropdown for folder selection
-folders = list_folders()
+# Streamlit関連のコードは__main__実行時のみ
+if __name__ == "__main__":
+    # Streamlit app
+    st.header("Select Folders from Input Directory")
+    # Dropdown for folder selection
+    folders = list_folders()
 
-selected_folder = st.selectbox("Select Folder", folders, index=0)
-csv_files = [
-    f for f in os.listdir(os.path.join(INPUT_FOLDER, selected_folder, 'main_tunnel', 'CN_measurement_data', 'measurements_A'))
-    if f.endswith('.csv')
-]
-model_name = st.selectbox("Select Model", list(models.keys()))
-td = st.number_input("prediction TD(m)", value=500, step=1, min_value=0, max_value=2000, format="%d", key="td")
-max_distance_from_face = st.number_input("Max distance from cutter face", value=100, step=1, min_value=10, max_value=MAX_DISTANCE_M, format="%d", key="max_distance")
-tab1, tab2 = st.tabs(["Whole analysis", "Local analysis"])
-model_paths = {
-    # 最終沈下量、変位量予測モデルのパス
-    "final_value_prediction_model": [
-    os.path.join(OUTPUT_FOLDER, f"model_final_settlement.pkl"),
-    os.path.join(OUTPUT_FOLDER, f"model_final_convergence.pkl")
-    ],
-    # 沈下量、変位量予測モデルのパス
-    "prediction_model": [
-    os.path.join(OUTPUT_FOLDER, f"model_settlement.pkl"),
-    os.path.join(OUTPUT_FOLDER, f"model_convergence.pkl")
+    selected_folder = st.selectbox("Select Folder", folders, index=0)
+    csv_files = [
+        f for f in os.listdir(os.path.join(INPUT_FOLDER, selected_folder, 'main_tunnel', 'CN_measurement_data', 'measurements_A'))
+        if f.endswith('.csv')
     ]
-}
-
-try:
-    with tab1:
-        if st.button("Analyze Displacement"):
-            st.write(f"Selected Folder: {selected_folder}")
-
-            st.subheader("Displacement Analysis")
-            analyze_displacement(os.path.join(INPUT_FOLDER, selected_folder, 'main_tunnel', 'CN_measurement_data'), OUTPUT_FOLDER, model_paths, models[model_name], max_distance_from_face, td=td)
-            # Add tabs for better organization
-
-            st.success("Analysis Complete!")
-            # Display results in two columns
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.subheader("Displacement")
-                st.image(os.path.join(OUTPUT_FOLDER, 'conv.png'), caption="Convergence")
-                st.image(os.path.join(OUTPUT_FOLDER, 'conv_hist2.png'), caption="Distribution")
-                st.image(os.path.join(OUTPUT_FOLDER, 'scatter_distance_days_変位量.png'), caption="Temporal Spacial space")
-                st.image(os.path.join(OUTPUT_FOLDER, 'scatter_最終変位量との差分_train.png'), caption="Train data")
-                st.image(os.path.join(OUTPUT_FOLDER, 'scatter_最終変位量との差分_validate.png'), caption="Validation data")
-                st.image(os.path.join(OUTPUT_FOLDER, 'heatmap_最終変位量との差分.png'), caption="Heatmap")
-                st.image(os.path.join(OUTPUT_FOLDER, 'feature_importance_最終変位量との差分.png'), caption="Feature importance")
-            with col2:
-                st.subheader("Settlement")
-                st.image(os.path.join(OUTPUT_FOLDER, 'settle.png'), caption="Settlement")
-                st.image(os.path.join(OUTPUT_FOLDER, 'settle_hist2.png'), caption="Distribution")
-                st.image(os.path.join(OUTPUT_FOLDER, 'scatter_distance_days_沈下量.png'), caption="Temporal Spacial space")
-                st.image(os.path.join(OUTPUT_FOLDER, 'scatter_最終沈下量との差分_train.png'), caption="Train data")
-                st.image(os.path.join(OUTPUT_FOLDER, 'scatter_最終沈下量との差分_validate.png'), caption="Validation data")
-                st.image(os.path.join(OUTPUT_FOLDER, 'heatmap_最終沈下量との差分.png'), caption="Heatmap")
-                st.image(os.path.join(OUTPUT_FOLDER, 'feature_importance_最終沈下量との差分.png'), caption="Feature importance")
-
-    with tab2:
-        ameasure_file = st.selectbox("Select Cycle Number",sorted(csv_files))
-        distance_from_face = st.number_input("distance_from_face (m)", value=1.0, step=0.1, min_value=0.1, max_value=float(MAX_DISTANCE_M), format="%.1f")
-        daily_advance = st.number_input("Input daily excavation advance (m/day)", value=5.0, step=0.1, min_value=0.1, max_value=50.0, format="%.1f")
-
-        if st.button("Analyze Local Displacement"):
-            col1, col2 = st.columns(2)
-            input_folder = os.path.join(INPUT_FOLDER, selected_folder, 'main_tunnel', 'CN_measurement_data')
-            a_measure_path = os.path.join(INPUT_FOLDER, selected_folder, 'main_tunnel', 'CN_measurement_data', 'measurements_A', ameasure_file)
-            # prediction
-            df_all, settlements, convergences = simulate_displacement(input_folder, a_measure_path, max_distance_from_face)
-            td = float(df_all[TD_NO].values[0])
-            cycle_no = float(os.path.basename(a_measure_path).split('_')[2].split('.')[0])
-            
-            settlement_prediction_path = os.path.join(OUTPUT_FOLDER, f"settlement_prediction_{cycle_no}.png")
-            convergence_prediction_path = os.path.join(OUTPUT_FOLDER, f"convergence_prediction_{cycle_no}.png")
-            draw_local_prediction_chart(settlement_prediction_path, df_all[DISTANCE_FROM_FACE], df_all[settlements], df_all[DISTANCE_FROM_FACE], df_all[[l + "_prediction" for l in settlements]], f"最終沈下量予測 for Cycle {cycle_no} (TD: {td})")
-            draw_local_prediction_chart(convergence_prediction_path, df_all[DISTANCE_FROM_FACE], df_all[convergences], df_all[DISTANCE_FROM_FACE], df_all[[l + "_prediction" for l in convergences]], f"最終変位量予測 for Cycle {cycle_no} (TD: {td})")
-
-            # simulation
-            df_all_simulated, _, _ = simulate_displacement(input_folder, a_measure_path, max_distance_from_face, daily_advance, distance_from_face, recursive=True)
-            df_all_simulated.to_csv(os.path.join(OUTPUT_FOLDER, f"{os.path.basename(selected_folder)}_{os.path.basename(a_measure_path)}.csv"), index=False)
-            
-            settlement_simulation_path = os.path.join(OUTPUT_FOLDER, f"settlement_simulation_{cycle_no}.png")
-            convergence_simulation_path = os.path.join(OUTPUT_FOLDER, f"convergence_simulation_{cycle_no}.png")
-            draw_local_prediction_chart(settlement_simulation_path, df_all[DISTANCE_FROM_FACE], df_all[settlements], df_all_simulated[DISTANCE_FROM_FACE], df_all_simulated[[l + "_prediction" for l in settlements]], f"最終沈下量予測 for Cycle {cycle_no} (TD: {td})")
-            draw_local_prediction_chart(convergence_simulation_path, df_all[DISTANCE_FROM_FACE], df_all[convergences], df_all_simulated[DISTANCE_FROM_FACE], df_all_simulated[[l + "_prediction" for l in convergences]], f"最終変位量予測 for Cycle {cycle_no} (TD: {td})")
-
-            st.subheader(f"Prediction (Actual excavation)")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.image(convergence_prediction_path, caption="Convergence")
-            with col2:
-                st.image(settlement_prediction_path, caption="Settlement")
-
-            st.subheader(f"Simulation ({daily_advance} m/day from TD:{distance_from_face}m)")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.image(convergence_simulation_path, caption="Convergence")
-            with col2:
-                st.image(settlement_simulation_path, caption="Settlement")
-            
-            st.dataframe(df_all_simulated[[DISTANCE_FROM_FACE] + [l + "_prediction" for l in convergences + settlements]])
-
-except Exception as e:
-    st.rerun()
+    model_name = st.selectbox("Select Model", list(models.keys()))
+    td = st.number_input("prediction TD(m)", value=500, step=1, min_value=0, max_value=2000, format="%d", key="td")
+    max_distance_from_face = st.number_input("Max distance from cutter face", value=100, step=1, min_value=10, max_value=MAX_DISTANCE_M, format="%d", key="max_distance")
+    tab1, tab2 = st.tabs(["Whole analysis", "Local analysis"])
+    model_paths = {
+        # 最終沈下量、変位量予測モデルのパス
+        "final_value_prediction_model": [
+        os.path.join(OUTPUT_FOLDER, f"model_final_settlement.pkl"),
+        os.path.join(OUTPUT_FOLDER, f"model_final_convergence.pkl")
+        ],
+        # 沈下量、変位量予測モデルのパス
+        "prediction_model": [
+        os.path.join(OUTPUT_FOLDER, f"model_settlement.pkl"),
+        os.path.join(OUTPUT_FOLDER, f"model_convergence.pkl")
+        ]
+    }
+    
+    try:
+        with tab1:
+            if st.button("Analyze Displacement"):
+                st.write(f"Selected Folder: {selected_folder}")
+    
+                st.subheader("Displacement Analysis")
+                analyze_displacement(os.path.join(INPUT_FOLDER, selected_folder, 'main_tunnel', 'CN_measurement_data'), OUTPUT_FOLDER, model_paths, models[model_name], max_distance_from_face, td=td)
+                # Add tabs for better organization
+    
+                st.success("Analysis Complete!")
+                # Display results in two columns
+                col1, col2 = st.columns(2)
+    
+                with col1:
+                    st.subheader("Displacement")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'conv.png'), caption="Convergence")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'conv_hist2.png'), caption="Distribution")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'scatter_distance_days_変位量.png'), caption="Temporal Spacial space")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'scatter_最終変位量との差分_train.png'), caption="Train data")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'scatter_最終変位量との差分_validate.png'), caption="Validation data")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'heatmap_最終変位量との差分.png'), caption="Heatmap")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'feature_importance_最終変位量との差分.png'), caption="Feature importance")
+                with col2:
+                    st.subheader("Settlement")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'settle.png'), caption="Settlement")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'settle_hist2.png'), caption="Distribution")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'scatter_distance_days_沈下量.png'), caption="Temporal Spacial space")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'scatter_最終沈下量との差分_train.png'), caption="Train data")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'scatter_最終沈下量との差分_validate.png'), caption="Validation data")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'heatmap_最終沈下量との差分.png'), caption="Heatmap")
+                    st.image(os.path.join(OUTPUT_FOLDER, 'feature_importance_最終沈下量との差分.png'), caption="Feature importance")
+    
+        with tab2:
+            ameasure_file = st.selectbox("Select Cycle Number",sorted(csv_files))
+            distance_from_face = st.number_input("distance_from_face (m)", value=1.0, step=0.1, min_value=0.1, max_value=float(MAX_DISTANCE_M), format="%.1f")
+            daily_advance = st.number_input("Input daily excavation advance (m/day)", value=5.0, step=0.1, min_value=0.1, max_value=50.0, format="%.1f")
+    
+            if st.button("Analyze Local Displacement"):
+                col1, col2 = st.columns(2)
+                input_folder = os.path.join(INPUT_FOLDER, selected_folder, 'main_tunnel', 'CN_measurement_data')
+                a_measure_path = os.path.join(INPUT_FOLDER, selected_folder, 'main_tunnel', 'CN_measurement_data', 'measurements_A', ameasure_file)
+                # prediction
+                df_all, settlements, convergences = simulate_displacement(input_folder, a_measure_path, max_distance_from_face)
+                td = float(df_all[TD_NO].values[0])
+                cycle_no = float(os.path.basename(a_measure_path).split('_')[2].split('.')[0])
+                
+                settlement_prediction_path = os.path.join(OUTPUT_FOLDER, f"settlement_prediction_{cycle_no}.png")
+                convergence_prediction_path = os.path.join(OUTPUT_FOLDER, f"convergence_prediction_{cycle_no}.png")
+                draw_local_prediction_chart(settlement_prediction_path, df_all[DISTANCE_FROM_FACE], df_all[settlements], df_all[DISTANCE_FROM_FACE], df_all[[l + "_prediction" for l in settlements]], f"最終沈下量予測 for Cycle {cycle_no} (TD: {td})")
+                draw_local_prediction_chart(convergence_prediction_path, df_all[DISTANCE_FROM_FACE], df_all[convergences], df_all[DISTANCE_FROM_FACE], df_all[[l + "_prediction" for l in convergences]], f"最終変位量予測 for Cycle {cycle_no} (TD: {td})")
+    
+                # simulation
+                df_all_simulated, _, _ = simulate_displacement(input_folder, a_measure_path, max_distance_from_face, daily_advance, distance_from_face, recursive=True)
+                df_all_simulated.to_csv(os.path.join(OUTPUT_FOLDER, f"{os.path.basename(selected_folder)}_{os.path.basename(a_measure_path)}.csv"), index=False)
+                
+                settlement_simulation_path = os.path.join(OUTPUT_FOLDER, f"settlement_simulation_{cycle_no}.png")
+                convergence_simulation_path = os.path.join(OUTPUT_FOLDER, f"convergence_simulation_{cycle_no}.png")
+                draw_local_prediction_chart(settlement_simulation_path, df_all[DISTANCE_FROM_FACE], df_all[settlements], df_all_simulated[DISTANCE_FROM_FACE], df_all_simulated[[l + "_prediction" for l in settlements]], f"最終沈下量予測 for Cycle {cycle_no} (TD: {td})")
+                draw_local_prediction_chart(convergence_simulation_path, df_all[DISTANCE_FROM_FACE], df_all[convergences], df_all_simulated[DISTANCE_FROM_FACE], df_all_simulated[[l + "_prediction" for l in convergences]], f"最終変位量予測 for Cycle {cycle_no} (TD: {td})")
+    
+                st.subheader(f"Prediction (Actual excavation)")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.image(convergence_prediction_path, caption="Convergence")
+                with col2:
+                    st.image(settlement_prediction_path, caption="Settlement")
+    
+                st.subheader(f"Simulation ({daily_advance} m/day from TD:{distance_from_face}m)")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.image(convergence_simulation_path, caption="Convergence")
+                with col2:
+                    st.image(settlement_simulation_path, caption="Settlement")
+                
+                st.dataframe(df_all_simulated[[DISTANCE_FROM_FACE] + [l + "_prediction" for l in convergences + settlements]])
+    
+    except Exception as e:
+        st.error(f"エラーが発生しました: {e}")
+        st.rerun()

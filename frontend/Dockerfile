@@ -17,8 +17,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# 環境変数ファイルをコピー（.env.sampleを.envとしてコピー）
-COPY .env.sample .env
+# 環境変数ファイルをコピー（存在しない場合はスキップ）
+# COPY .env.sample .env
 
 # Next.jsアプリケーションをビルド
 RUN npm run build
@@ -42,8 +42,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # publicディレクトリの内容をコピー
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# 環境変数ファイルを実行環境にもコピー（ビルドステージから.envをコピー）
-COPY --from=builder --chown=nextjs:nodejs /app/.env ./
+# 環境変数ファイルを実行環境にもコピー（存在する場合のみ）
+# COPY --from=builder --chown=nextjs:nodejs /app/.env ./
 
 # nextjsユーザーに所有権を変更
 RUN chown -R nextjs:nodejs /app

@@ -36,6 +36,9 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 
+# Streamlit（GUI関連）
+streamlit==1.32.0
+
 # テスト
 pytest==7.4.4
 pytest-asyncio==0.21.1

@@ -20,6 +20,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # アプリケーションコードのコピー
 COPY ./app /app/app
 
+# GUI関連ファイルをコピー（ai_ameasureディレクトリから）
+# 注: docker-compose.ymlでボリュームマウントするため、ここではコピーしない
+# COPY ../../ai_ameasure/gui_displacement_temporal_spacial_analysis.py /app/
+
 # テストコードのコピー（テスト実行用）
 COPY ./tests /app/tests
 COPY ./pytest.ini /app/pytest.ini

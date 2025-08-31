@@ -14,7 +14,7 @@ from app.schemas import simulation as schemas
 from fastapi import APIRouter, HTTPException, status
 
 # GUI関数をインポートするためのパス設定
-gui_path = '/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure'
+gui_path = '/app'
 if gui_path not in sys.path:
     sys.path.append(gui_path)
 

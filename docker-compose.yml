@@ -12,21 +12,88 @@ services:
     networks:
       - mlp_network
 
-  backend:
-    build:
-      context: .
-      dockerfile: ./docker/Dockerfile
-    container_name: mlp_django_app
+  admin:
+    build: 
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: mlp_admin
+    environment:
+      SECRET_KEY: 'django-insecure-your-secret-key-here'
+      DEBUG: 'True'
+      ALLOWED_HOSTS: 'localhost,127.0.0.1,0.0.0.0'
+      MYSQL_HOST: 'db'
+      MYSQL_DB: 'mlp_db'
+      MYSQL_USER: 'root'
+      MYSQL_PASSWORD: 'mysql_pass'
+      MYSQL_PORT: '3306'
+      TIME_ZONE: 'Asia/Tokyo'
+      TOKEN_LIFETIME: '7'
+      CORS_ORIGIN_WHITELIST: 'http://localhost:3000,http://127.0.0.1:3000'
+    ports:
+      - '8080:8080'
+    depends_on:
+      - db
+    networks:
+      - mlp_network
     volumes:
-      - ./backend:/app/backend
+      - ./admin:/app
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py create_superuser &&
+             python manage.py seed_locations &&
+             python manage.py seed_features &&
+             python run.py runserver 0.0.0.0:8080"
+
+  ai-ameasure:
+    build: 
+      context: ./microservices/ai_ameasure
+      dockerfile: Dockerfile
+    container_name: mlp_ai_ameasure
+    environment:
+      MYSQL_HOST: 'db'
+      MYSQL_DB: 'mlp_db'
+      MYSQL_USER: 'root'
+      MYSQL_PASSWORD: 'mysql_pass'
+      MYSQL_PORT: '3306'
+      DATA_FOLDER: '/app/data'
+      OUTPUT_FOLDER: '/app/output'
+      ENVIRONMENT: 'production'
+      DEBUG: 'False'
     ports:
       - '8000:8000'
     depends_on:
       - db
-    env_file:
-      - ./admin/.env
     networks:
       - mlp_network
+    volumes:
+      - ./data_folder:/app/data
+      - ./output:/app/output
+      - ./ai_ameasure/app/master:/app/app/master
+      - ./ai_ameasure/gui_displacement_temporal_spacial_analysis.py:/app/gui_displacement_temporal_spacial_analysis.py
+      - ./ai_ameasure/config.json:/app/config.json
+    restart: unless-stopped
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mlp_frontend
+    environment:
+      NODE_ENV: 'production'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_API_URL: 'http://localhost:8000'
+      NEXT_PUBLIC_ADMIN_API_URL: 'http://localhost:8080'
+      NEXT_PUBLIC_CAMERA1_URL: 'http://localhost:8001'
+      NEXT_PUBLIC_CAMERA2_URL: 'http://localhost:8002'
+      NEXT_PUBLIC_BACKEND2_URL: 'http://localhost:8003'
+    ports:
+      - '3000:3000'
+    depends_on:
+      - admin
+      - ai-ameasure
+    networks:
+      - mlp_network
+    restart: unless-stopped
 
 volumes:
   mysql_data:

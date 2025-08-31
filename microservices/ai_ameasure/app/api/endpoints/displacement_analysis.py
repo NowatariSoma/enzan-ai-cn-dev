@@ -29,7 +29,7 @@ from app.schemas import displacement_analysis as schemas
 
 # Streamlitプロジェクトから直接インポート
 import importlib.util
-spec = importlib.util.spec_from_file_location("streamlit_displacement", "/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure/app/displacement_temporal_spacial_analysis.py")
+spec = importlib.util.spec_from_file_location("streamlit_displacement", "/app/app/displacement_temporal_spacial_analysis.py")
 streamlit_displacement = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(streamlit_displacement)
 
@@ -48,7 +48,7 @@ SETTLEMENTS = streamlit_displacement.SETTLEMENTS
 CONVERGENCES = streamlit_displacement.CONVERGENCES
 
 # displacement.pyもStreamlitから
-spec2 = importlib.util.spec_from_file_location("streamlit_displ", "/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure/app/displacement.py")
+spec2 = importlib.util.spec_from_file_location("streamlit_displ", "/app/app/displacement.py")
 streamlit_displ = importlib.util.module_from_spec(spec2)
 spec2.loader.exec_module(streamlit_displ)
 DURATION_DAYS = streamlit_displ.DURATION_DAYS
