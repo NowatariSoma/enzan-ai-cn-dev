@@ -44,15 +44,16 @@ export function FeatureImportanceSection({ title, data }: FeatureImportanceSecti
                   textAnchor="end"
                   height={100}
                   interval={0}
-                  fontSize={12}
+                  fontSize={8}
                 />
                 <YAxis
                   stroke="#6B7280"
+                  fontSize={10}
                   label={{ 
                     value: 'Feature Importance', 
                     angle: -90, 
                     position: 'insideLeft',
-                    style: { textAnchor: 'middle' }
+                    style: { textAnchor: 'middle', fontSize: '10px' }
                   }}
                 />
                 <Tooltip

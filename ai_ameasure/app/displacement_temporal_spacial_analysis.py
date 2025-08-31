@@ -487,6 +487,9 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
         }
     }
     
+    # 特徴量重要度データを収集
+    feature_importance_data = {}
+    
     data_types = ['settlement', 'convergence']
     for i, (df, x_columns, y_column) in enumerate([settlement_data, convergence_data]):
         data_type = data_types[i]
@@ -502,6 +505,14 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
         scatter_data[data_type]['validate_predictions'].extend(scatter_info['validate_predictions'])
         training_metrics[y_column] = scatter_info['metrics']
         
+        # 特徴量重要度を収集
+        if hasattr(model, 'feature_importances_'):
+            features = {}
+            if len(x_columns) == len(model.feature_importances_):
+                for name, importance in zip(x_columns, model.feature_importances_):
+                    features[name] = float(importance)
+            feature_importance_data[f'{data_type}_final_{y_column}'] = dict(sorted(features.items(), key=lambda item: item[1], reverse=True))
+        
         # 変位量、沈下量モデル
         y_column = x_columns[2]
         x_columns = [x for x in x_columns if x != y_column]
@@ -515,6 +526,14 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
             'current': scatter_info['metrics']  # 現在値のメトリクス
         }
         training_metrics[y_column] = scatter_info['metrics']
+        
+        # 特徴量重要度を収集（通常値）
+        if hasattr(model, 'feature_importances_'):
+            features = {}
+            if len(x_columns) == len(model.feature_importances_):
+                for name, importance in zip(x_columns, model.feature_importances_):
+                    features[name] = float(importance)
+            feature_importance_data[f'{data_type}_current_{y_column}'] = dict(sorted(features.items(), key=lambda item: item[1], reverse=True))
     
     # 散布図データは既に上で収集済み（CSVファイルは使わない）
     
@@ -524,8 +543,9 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
     convergence_validate = len(scatter_data['convergence']['validate_actual'])
     print(f"Final scatter data collected - settlement train: {settlement_train}, validate: {settlement_validate}, convergence train: {convergence_train}, validate: {convergence_validate}")
     print(f"Training metrics keys: {list(training_metrics.keys())}")
+    print(f"Feature importance data keys: {list(feature_importance_data.keys())}")
     
-    return df_all, training_metrics, scatter_data
+    return df_all, training_metrics, scatter_data, feature_importance_data
 
 def main():
     parser = argparse.ArgumentParser(description="Process input and output paths.")

@@ -68,19 +68,30 @@ def get_models():
     }
 
 def extract_feature_importance(model, x_columns):
-    """モデルから特徴量重要度を安全に抽出"""
+    """モデルから特徴量重要度を安全に抽出（キーと値をペアで返す）"""
     if hasattr(model, 'feature_importances_'):
+        # 特徴量名と重要度をペアにしたdictを作成
+        features = {}
+        if len(x_columns) == len(model.feature_importances_):
+            for name, importance in zip(x_columns, model.feature_importances_):
+                features[name] = float(importance)
+        
+        # 重要度順にソート
+        features_sorted = dict(sorted(features.items(), key=lambda item: item[1], reverse=True))
+        
         return {
-            'feature_names': x_columns,
-            'importance_values': model.feature_importances_.tolist(),
-            'available': True
+            'features': features_sorted,
+            'available': True,
+            'total_features': len(features),
+            'model_type': type(model).__name__
         }
     else:
         return {
-            'feature_names': x_columns,
-            'importance_values': [],
+            'features': {},
             'available': False,
-            'reason': f"{type(model).__name__} does not support feature importance"
+            'reason': f"{type(model).__name__} does not support feature importance",
+            'total_features': 0,
+            'model_type': type(model).__name__
         }
 
 def extract_metrics_from_output(output_path):
@@ -316,34 +327,43 @@ async def analyze_whole_displacement(request: schemas.WholeAnalysisRequest) -> s
                 td=request.td
             )
             
-            # 戻り値の処理（Streamlitと同じ）
+            # 戻り値の処理（新しい形式に対応）
             if isinstance(result, tuple):
-                if len(result) == 3:
+                if len(result) == 4:
+                    df_all, training_metrics, scatter_data, feature_importance_from_analysis = result
+                elif len(result) == 3:
                     df_all, training_metrics, scatter_data = result
+                    feature_importance_from_analysis = {}
                 elif len(result) == 2:
                     df_all, training_metrics = result
                     scatter_data = {}
+                    feature_importance_from_analysis = {}
                 else:
                     df_all = result[0] if result else None
                     training_metrics = {}
                     scatter_data = {}
+                    feature_importance_from_analysis = {}
             else:
                 df_all = result
                 training_metrics = {}
                 scatter_data = {}
+                feature_importance_from_analysis = {}
             
             logger.info(f"Complete analysis finished. Training metrics: {list(training_metrics.keys()) if training_metrics else 'None'}")
             logger.info(f"Result type: {type(result)}, length: {len(result) if isinstance(result, tuple) else 'N/A'}")
             logger.info(f"Scatter data keys: {list(scatter_data.keys()) if scatter_data else 'None'}")
-            logger.info(f"Scatter data train length: {len(scatter_data.get('train_actual', [])) if scatter_data else 'N/A'}")
+            if scatter_data:
+                for category in ['settlement', 'convergence']:
+                    if category in scatter_data:
+                        train_len = len(scatter_data[category].get('train_actual', []))
+                        logger.info(f"Scatter data {category} train length: {train_len}")
             
-            # 特徴量重要度を取得（安全に）
-            feature_importance = {}
-            if hasattr(model, 'feature_importances_'):
-                try:
-                    feature_importance = extract_feature_importance(model, [])
-                except Exception as e:
-                    logger.warning(f"Failed to extract feature importance: {e}")
+            # 新しい特徴量重要度データを使用
+            feature_importance = {
+                'available': bool(feature_importance_from_analysis),
+                'model_type': type(model).__name__ if model else 'Unknown',
+                'features_by_category': feature_importance_from_analysis
+            }
             
             # モデルファイルの保存状況を確認
             required_files = ['model_final_settlement.pkl', 'model_final_convergence.pkl', 

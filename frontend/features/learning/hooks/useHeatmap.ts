@@ -96,7 +96,7 @@ export function useHeatmap() {
     return { correlationMatrix, heatmapData, validColumns };
   };
 
-  const fetchHeatmapData = useCallback(async (folderName: string, maxDistance: number = 100) => {
+  const fetchSettlementHeatmapData = useCallback(async (folderName: string, maxDistance: number = 100) => {
     setLoading(true);
     setError(null);
 
@@ -119,15 +119,15 @@ export function useHeatmap() {
 
       const result: DatasetResponse = await response.json();
       
-      // settlement_dataとconvergence_dataを結合
-      const combinedData = [...result.settlement_data, ...result.convergence_data];
+      // settlement_dataのみ使用
+      const settlementData = result.settlement_data;
       
-      if (combinedData.length === 0) {
+      if (settlementData.length === 0) {
         throw new Error('No data available');
       }
 
       // 利用可能な列を取得
-      const allColumns = Object.keys(combinedData[0] || {});
+      const allColumns = Object.keys(settlementData[0] || {});
       setAvailableColumns(allColumns);
       
       // X列の特徴量（26列）+ Y列（目的変数）をハードコーディング
@@ -172,7 +172,7 @@ export function useHeatmap() {
         throw new Error('Not enough numeric columns for correlation analysis');
       }
 
-      const { heatmapData, validColumns } = calculateCorrelation(combinedData, featuresToUse);
+      const { heatmapData, validColumns } = calculateCorrelation(settlementData, featuresToUse);
       
       // 指定した順序を保持するため、featuresToUseの順序でvalidColumnsを並び替え
       const orderedFeatures = featuresToUse.filter(col => validColumns?.includes(col) || featuresToUse.includes(col));
@@ -184,6 +184,96 @@ export function useHeatmap() {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);
       console.error('Error fetching heatmap data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchConvergenceHeatmapData = useCallback(async (folderName: string, maxDistance: number = 100) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // API呼び出し
+      const response = await fetch(`${API_BASE_URL}/measurements/make-dataset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          folder_name: folderName,
+          max_distance_from_face: maxDistance,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result: DatasetResponse = await response.json();
+      
+      // convergence_dataのみ使用
+      const convergenceData = result.convergence_data;
+      
+      if (convergenceData.length === 0) {
+        throw new Error('No data available');
+      }
+
+      // 利用可能な列を取得
+      const allColumns = Object.keys(convergenceData[0] || {});
+      
+      // X列の特徴量（26列）+ Y列（目的変数）をハードコーディング
+      const candidateFeatures = [
+        // X列特徴量（26列）
+        '切羽からの距離',
+        '計測経過日数',
+        '変位量',                    // Convergence用
+        '支保寸法',
+        '吹付厚',
+        'ﾛｯｸﾎﾞﾙﾄ数',
+        'ﾛｯｸﾎﾞﾙﾄ長',
+        '覆工厚',
+        '土被り高さ',
+        '岩石グループ',
+        '岩石名コード',
+        '加重平均評価点',
+        '圧縮強度',
+        '風化変質',
+        '割目間隔',
+        '割目状態',
+        '割目の方向・平行',
+        '湧水量',
+        '劣化',
+        '評価点',
+        '補助工法の緒元_bit',
+        '増し支保工の緒元_bit',
+        '計測条件・状態等_bit',
+        'インバートの早期障害_bit',
+        '支保工種_numeric',
+        '支保パターン2_numeric',
+        // Y列（目的変数）
+        '最終変位量との差分'           // Convergence用
+      ].filter(col => allColumns.includes(col));
+
+      // 全ての候補特徴量を使用（列の除外はしない）
+      const featuresToUse = candidateFeatures;
+      
+      if (featuresToUse.length < 2) {
+        throw new Error('Not enough numeric columns for correlation analysis');
+      }
+
+      const { heatmapData, validColumns } = calculateCorrelation(convergenceData, featuresToUse);
+      
+      // 指定した順序を保持するため、featuresToUseの順序でvalidColumnsを並び替え
+      const orderedFeatures = featuresToUse.filter(col => validColumns?.includes(col) || featuresToUse.includes(col));
+      
+      return { heatmapData, features: orderedFeatures };
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(errorMessage);
+      console.error('Error fetching convergence heatmap data:', err);
+      return { heatmapData: [], features: [] };
     } finally {
       setLoading(false);
     }
@@ -233,6 +323,8 @@ export function useHeatmap() {
     }
   }, []);
 
+  const fetchHeatmapData = fetchSettlementHeatmapData; // 後方互換性のため
+
   return {
     heatmapData,
     features,
@@ -240,6 +332,8 @@ export function useHeatmap() {
     loading,
     error,
     fetchHeatmapData,
+    fetchSettlementHeatmapData,
+    fetchConvergenceHeatmapData,
     generateHeatmapImage,
   };
 } 

@@ -56,8 +56,14 @@ export function HeatmapSection({ title, data, features }: HeatmapSectionProps) {
     return matrix;
   }, [data, features]);
 
-  const cellSize = 18; // Reduced from 25 to 18
-  const fontSize = 8; // Reduced font size for labels
+  // Responsive cell size to fit everything in container
+  const maxFeatures = Math.max(features.length, 1);
+  const containerWidth = 580; // Increased available width in the card container
+  const labelSpace = 140; // Increased space reserved for labels
+  const availableWidth = containerWidth - labelSpace;
+  const calculatedCellSize = availableWidth / maxFeatures;
+  const cellSize = Math.max(6, Math.min(calculatedCellSize, 20)); // Min 6px, Max 20px per cell
+  const fontSize = Math.max(6, cellSize * 0.45); // Slightly larger proportional font size
 
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -67,27 +73,29 @@ export function HeatmapSection({ title, data, features }: HeatmapSectionProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center justify-center w-full">
           {/* Main heatmap */}
-          <div className="relative">
+          <div className="relative w-full max-w-xl ml-4">
             <svg 
-              width={features.length * cellSize + 30} // Reduced margin from 50 to 30 (20px left)
-              height={features.length * cellSize + 140} // Increased height from 120 to 140 (20px down)
-              className="overflow-visible"
+              width="100%"
+              height={features.length * cellSize + 140}
+              className="w-full"
+              viewBox={`0 0 ${containerWidth} ${features.length * cellSize + 140}`}
+              preserveAspectRatio="xMidYMid meet"
             >
               {/* Y-axis labels */}
               {features.map((feature, i) => (
                 <text
                   key={`y-${i}`}
-                  x={25} // Adjusted position from 45 to 25 (20px left)
-                  y={i * cellSize + cellSize / 2 + 60} // Adjusted position from 40 to 60 (20px down)
+                  x={labelSpace - 10}
+                  y={i * cellSize + cellSize / 2 + 60}
                   textAnchor="end"
                   dominantBaseline="middle"
                   fontSize={fontSize}
                   fill="#6B7280"
-                  transform={`rotate(-45, 25, ${i * cellSize + cellSize / 2 + 60})`}
+                  className="select-none"
                 >
-                  {feature}
+                  {feature.length > 18 ? `${feature.substring(0, 15)}...` : feature}
                 </text>
               ))}
 
@@ -95,15 +103,16 @@ export function HeatmapSection({ title, data, features }: HeatmapSectionProps) {
               {features.map((feature, i) => (
                 <text
                   key={`x-${i}`}
-                  x={i * cellSize + cellSize / 2 + 30} // Adjusted position from 50 to 30 (20px left)
-                  y={55} // Adjusted position from 35 to 55 (20px down)
+                  x={i * cellSize + cellSize / 2 + labelSpace}
+                  y={50}
                   textAnchor="start"
                   dominantBaseline="middle"
                   fontSize={fontSize}
                   fill="#6B7280"
-                  transform={`rotate(-45, ${i * cellSize + cellSize / 2 + 30}, 55)`}
+                  transform={`rotate(-45, ${i * cellSize + cellSize / 2 + labelSpace}, 50)`}
+                  className="select-none"
                 >
-                  {feature}
+                  {feature.length > 18 ? `${feature.substring(0, 15)}...` : feature}
                 </text>
               ))}
 
@@ -114,14 +123,17 @@ export function HeatmapSection({ title, data, features }: HeatmapSectionProps) {
                   return (
                     <rect
                       key={`${i}-${j}`}
-                      x={j * cellSize + 30} // Adjusted position from 50 to 30 (20px left)
-                      y={i * cellSize + 60} // Adjusted position from 40 to 60 (20px down)
+                      x={j * cellSize + labelSpace}
+                      y={i * cellSize + 60}
                       width={cellSize}
                       height={cellSize}
                       fill={getColor(value)}
                       stroke="#fff"
                       strokeWidth={0.5}
-                    />
+                      className="hover:stroke-gray-600 hover:stroke-1 transition-all duration-200"
+                    >
+                      <title>{`${yFeature} vs ${xFeature}: ${value.toFixed(3)}`}</title>
+                    </rect>
                   );
                 })
               )}
@@ -129,8 +141,8 @@ export function HeatmapSection({ title, data, features }: HeatmapSectionProps) {
           </div>
 
           {/* Horizontal Color bar */}
-          <div className="mt-1 flex flex-col items-center">
-            <div className="relative w-48 h-5 rounded" style={{
+          <div className="mt-4 flex flex-col items-center w-full max-w-xs">
+            <div className="relative w-full h-4 rounded shadow-sm" style={{
               background: `linear-gradient(to right, 
                 rgb(0, 0, 255) 0%, 
                 rgb(255, 255, 255) 50%, 
@@ -139,19 +151,19 @@ export function HeatmapSection({ title, data, features }: HeatmapSectionProps) {
               {/* Color bar ticks */}
               {[-1, -0.5, 0, 0.5, 1].map((value, index) => (
                 <div key={index} className="absolute flex flex-col items-center" style={{ left: `${index * 25}%`, transform: 'translateX(-50%)' }}>
-                  <div className="w-0.5 h-2 bg-black mt-5"></div>
-                  <span className="text-xs text-gray-600 mt-1">{value.toFixed(1)}</span>
+                  <div className="w-0.5 h-3 bg-black mt-4"></div>
+                  <span className="text-xs text-gray-600 mt-0.5 font-medium">{value.toFixed(1)}</span>
                 </div>
               ))}
             </div>
-            <div className="text-xs text-gray-600 mt-8">
-              Correlation
+            <div className="text-xs text-gray-600 mt-6 font-semibold">
+              相関係数
             </div>
           </div>
         </div>
         
-        <p className="text-sm text-gray-500 text-center mt-4">
-          X列特徴量（座標・変位）間の相関関係
+        <p className="text-xs text-gray-500 text-center mt-3 leading-relaxed">
+          特徴量間の相関関係を表示。青は負の相関、赤は正の相関を示します。
         </p>
       </CardContent>
     </Card>

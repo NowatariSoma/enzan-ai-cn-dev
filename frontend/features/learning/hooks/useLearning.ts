@@ -25,7 +25,11 @@ export function useLearning() {
   const [analysisData, setAnalysisData] = useState<WholeAnalysisResult | null>(null);
 
   // useHeatmapフックを使用
-  const { heatmapData, features, fetchHeatmapData } = useHeatmap();
+  const { heatmapData, features, fetchHeatmapData, fetchConvergenceHeatmapData } = useHeatmap();
+  
+  // State for convergence heatmap data
+  const [convergenceHeatmapData, setConvergenceHeatmapData] = useState<any[]>([]);
+  const [convergenceFeatures, setConvergenceFeatures] = useState<string[]>([]);
 
   // locationパラメータを直接フォルダ名として使用
   useEffect(() => {
@@ -38,7 +42,14 @@ export function useLearning() {
   // フォルダが変更されたときにヒートマップデータを取得
   useEffect(() => {
     fetchHeatmapData(folderName, maxDistance);
-  }, [folderName, maxDistance, fetchHeatmapData]);
+    // 変位量ヒートマップも取得
+    fetchConvergenceHeatmapData(folderName, maxDistance).then((result) => {
+      if (result) {
+        setConvergenceHeatmapData(result.heatmapData);
+        setConvergenceFeatures(result.features);
+      }
+    });
+  }, [folderName, maxDistance, fetchHeatmapData, fetchConvergenceHeatmapData]);
 
   // Generate mock data for charts
   const generateChartData = () => {
@@ -112,30 +123,36 @@ export function useLearning() {
     return [];
   }, [analysisData]);
 
-  const featureImportanceData = useMemo(() => {
-    if (analysisData?.feature_importance) {
-      const featureImportance = analysisData.feature_importance;
+  // Settlement feature importance (沈下量用)
+  const featureImportanceDataA = useMemo(() => {
+    if (analysisData?.feature_importance?.features_by_category) {
+      const featuresData = analysisData.feature_importance.features_by_category;
+      // Use settlement final data
+      const settlementFinal = featuresData['settlement_final_最終沈下量との差分'];
       
-      // Check if it's the new format with feature_names and importance_values arrays
-      if (featureImportance.feature_names && featureImportance.importance_values) {
-        return featureImportance.feature_names
-          .map((feature: string, index: number) => ({
-            feature,
-            importance: Number(featureImportance.importance_values[index] || 0)
-          }))
-          .sort((a: any, b: any) => b.importance - a.importance)
-          .slice(0, 10); // Top 10 features
-      }
-      
-      // Fallback to old format
-      if (typeof featureImportance === 'object') {
-        return Object.entries(featureImportance)
+      if (settlementFinal) {
+        return Object.entries(settlementFinal)
           .map(([feature, importance]) => ({ feature, importance: Number(importance) }))
-          .sort((a, b) => b.importance - a.importance)
-          .slice(0, 10);
+          .sort((a, b) => b.importance - a.importance); // All features
       }
     }
-    return []; // Return empty array instead of mock data
+    return [];
+  }, [analysisData]);
+
+  // Convergence feature importance (変位量用)
+  const featureImportanceDataB = useMemo(() => {
+    if (analysisData?.feature_importance?.features_by_category) {
+      const featuresData = analysisData.feature_importance.features_by_category;
+      // Use convergence final data
+      const convergenceFinal = featuresData['convergence_final_最終変位量との差分'];
+      
+      if (convergenceFinal) {
+        return Object.entries(convergenceFinal)
+          .map(([feature, importance]) => ({ feature, importance: Number(importance) }))
+          .sort((a, b) => b.importance - a.importance); // All features
+      }
+    }
+    return [];
   }, [analysisData]);
 
   // Map settlement and convergence data to A and B charts
@@ -143,12 +160,12 @@ export function useLearning() {
   const trainScatterDataB = trainScatterDataConvergence;
   const validationScatterDataA = validationScatterDataSettlement;
   const validationScatterDataB = validationScatterDataConvergence;
-  const featureImportanceA = featureImportanceData;
-  const featureImportanceB = featureImportanceData;
+  const featureImportanceA = featureImportanceDataA;
+  const featureImportanceB = featureImportanceDataB;
   
-  // 実際のヒートマップデータを使用
-  const heatmapDataA = { data: heatmapData, features };
-  const heatmapDataB = { data: heatmapData, features };
+  // 実際のヒートマップデータを使用（沈下量と変位量で分ける）
+  const heatmapDataA = { data: heatmapData, features }; // 沈下量
+  const heatmapDataB = { data: convergenceHeatmapData, features: convergenceFeatures }; // 変位量
 
   // Metrics from analyze-whole endpoint  
   // Get settlement metrics directly from scatter_data.settlement.metrics
@@ -238,8 +255,14 @@ export function useLearning() {
 
       setAnalysisData(data);
       
-      // Also fetch heatmap data
+      // Also fetch heatmap data for both settlement and convergence
       fetchHeatmapData(folderName, maxDistance);
+      fetchConvergenceHeatmapData(folderName, maxDistance).then((result) => {
+        if (result) {
+          setConvergenceHeatmapData(result.heatmapData);
+          setConvergenceFeatures(result.features);
+        }
+      });
     } catch (error) {
       console.error('Error fetching analyze-whole data:', error);
       // Set error state or show user-friendly error
