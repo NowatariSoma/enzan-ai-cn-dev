@@ -47,12 +47,12 @@ export function LearningDashboard() {
     validationMSEA,
     validationMSEB,
     handleAnalyze,
-    processEachData,
+    analysisData,
   } = useLearning();
 
   // Debug logging
   console.log('Dashboard render:', {
-    hasProcessEachData: !!processEachData,
+    hasAnalysisData: !!analysisData,
     trainScatterDataCount: trainScatterDataA?.length || 0,
     validationScatterDataCount: validationScatterDataA?.length || 0,
     trainMSEA,

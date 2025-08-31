@@ -4,22 +4,13 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useHeatmap } from './useHeatmap';
 
-interface ProcessEachResult {
-  model_name: string;
-  data_type: string;
-  metrics: {
-    mse_train: number;
-    r2_train: number;
-    mse_validate: number;
-    r2_validate: number;
-  };
-  train_predictions: number[];
-  validate_predictions: number[];
-  train_actual: number[];
-  validate_actual: number[];
-  feature_importance?: Record<string, number>;
-  scatter_train?: string;
-  scatter_validate?: string;
+interface WholeAnalysisResult {
+  status: string;
+  message: string;
+  training_metrics?: Record<string, any>;
+  scatter_data?: Record<string, any>;
+  feature_importance?: Record<string, any>;
+  model_files_saved?: boolean;
 }
 
 export function useLearning() {
@@ -31,7 +22,7 @@ export function useLearning() {
   const [maxDistance, setMaxDistance] = useState(100);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [dataType, setDataType] = useState<'settlement' | 'convergence'>('settlement');
-  const [processEachData, setProcessEachData] = useState<ProcessEachResult | null>(null);
+  const [analysisData, setAnalysisData] = useState<WholeAnalysisResult | null>(null);
 
   // useHeatmapフックを使用
   const { heatmapData, features, fetchHeatmapData } = useHeatmap();
@@ -69,48 +60,52 @@ export function useLearning() {
     return data;
   };
 
-  // Transform process-each data to scatter plot format
-  const transformToScatterData = (actual: number[], predicted: number[]) => {
-    if (!actual || !predicted) return [];
-    return actual.map((actualValue, index) => ({
+  // Transform scatter data from new API format
+  const transformScatterData = (scatterData: any) => {
+    if (!scatterData || !scatterData.train_actual || !scatterData.train_predictions) return [];
+    
+    return scatterData.train_actual.map((actualValue: number, index: number) => ({
       actual: actualValue,
-      predicted: predicted[index] || 0,
+      predicted: scatterData.train_predictions[index] || 0,
+    }));
+  };
+  
+  const transformValidationScatterData = (scatterData: any) => {
+    if (!scatterData || !scatterData.validate_actual || !scatterData.validate_predictions) return [];
+    
+    return scatterData.validate_actual.map((actualValue: number, index: number) => ({
+      actual: actualValue,
+      predicted: scatterData.validate_predictions[index] || 0,
     }));
   };
 
 
   const chartData = useMemo(() => generateChartData(), []);
   
-  // Use actual data from process-each endpoint if available, otherwise use mock data
+  // Use actual data from analyze-whole endpoint if available, otherwise use mock data
   const trainScatterData = useMemo(() => {
-    if (processEachData) {
-      return transformToScatterData(
-        processEachData.train_actual,
-        processEachData.train_predictions
-      );
+    if (analysisData?.scatter_data) {
+      return transformScatterData(analysisData.scatter_data);
     }
     return [];
-  }, [processEachData]);
+  }, [analysisData]);
 
   const validationScatterData = useMemo(() => {
-    if (processEachData) {
-      return transformToScatterData(
-        processEachData.validate_actual,
-        processEachData.validate_predictions
-      );
+    if (analysisData?.scatter_data) {
+      return transformValidationScatterData(analysisData.scatter_data);
     }
     return [];
-  }, [processEachData]);
+  }, [analysisData]);
 
   const featureImportanceData = useMemo(() => {
-    if (processEachData?.feature_importance) {
-      return Object.entries(processEachData.feature_importance)
-        .map(([feature, importance]) => ({ feature, importance }))
+    if (analysisData?.feature_importance) {
+      return Object.entries(analysisData.feature_importance)
+        .map(([feature, importance]) => ({ feature, importance: Number(importance) }))
         .sort((a, b) => b.importance - a.importance)
         .slice(0, 10); // Top 10 features
     }
     return []; // Return empty array instead of mock data
-  }, [processEachData]);
+  }, [analysisData]);
 
   // For backward compatibility with dual charts (A and B)
   const trainScatterDataA = trainScatterData;
@@ -124,13 +119,25 @@ export function useLearning() {
   const heatmapDataA = { data: heatmapData, features };
   const heatmapDataB = { data: heatmapData, features };
 
-  // Metrics from process-each endpoint
-  const trainMetrics = processEachData?.metrics || {
-    mse_train: 0,
-    r2_train: 0,
-    mse_validate: 0,
-    r2_validate: 0,
+  // Metrics from analyze-whole endpoint  
+  // Get metrics from training_metrics with Japanese keys
+  const getMetricsFromTrainingData = () => {
+    if (!analysisData?.training_metrics) {
+      return { mse_train: 0, r2_train: 0, mse_validate: 0, r2_validate: 0 };
+    }
+    
+    // Try to get metrics from the first available data type
+    const trainingMetrics = analysisData.training_metrics;
+    const firstKey = Object.keys(trainingMetrics)[0];
+    
+    if (firstKey && trainingMetrics[firstKey]) {
+      return trainingMetrics[firstKey];
+    }
+    
+    return { mse_train: 0, r2_train: 0, mse_validate: 0, r2_validate: 0 };
   };
+  
+  const trainMetrics = getMetricsFromTrainingData();
   
   const trainRSquaredA = trainMetrics.r2_train;
   const trainRSquaredB = trainMetrics.r2_train;
@@ -142,16 +149,14 @@ export function useLearning() {
   const validationMSEA = trainMetrics.mse_validate;
   const validationMSEB = trainMetrics.mse_validate;
 
-  // Fetch data from process-each endpoint
-  const fetchProcessEachData = useCallback(async () => {
+  // Fetch data from analyze-whole endpoint
+  const fetchAnalysisData = useCallback(async () => {
     setIsAnalyzing(true);
-    console.log('Fetching process-each data with params:', {
+    console.log('Fetching analyze-whole data with params:', {
       model_name: model,
       folder_name: folderName,
       max_distance_from_face: maxDistance,
-      data_type: dataType,
       td: predictionTD,
-      predict_final: true,
     });
 
     try {
@@ -161,7 +166,7 @@ export function useLearning() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5分
       
-      const response = await fetch(`${API_BASE_URL}/models/process-each`, {
+      const response = await fetch(`${API_BASE_URL}/displacement-analysis/analyze-whole`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -170,9 +175,7 @@ export function useLearning() {
           model_name: model,
           folder_name: folderName,
           max_distance_from_face: maxDistance,
-          data_type: dataType,
           td: predictionTD,
-          predict_final: true,
         }),
         signal: controller.signal,
       });
@@ -184,34 +187,34 @@ export function useLearning() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('API Error:', errorText);
-        throw new Error(`Failed to fetch process-each data: ${response.status} ${errorText}`);
+        throw new Error(`Failed to fetch analyze-whole data: ${response.status} ${errorText}`);
       }
 
-      const data: ProcessEachResult = await response.json();
+      const data: WholeAnalysisResult = await response.json();
       console.log('Received data:', {
-        model_name: data.model_name,
-        data_type: data.data_type,
-        metrics: data.metrics,
-        train_count: data.train_predictions?.length || 0,
-        validate_count: data.validate_predictions?.length || 0,
+        status: data.status,
+        message: data.message,
+        training_metrics: data.training_metrics,
+        scatter_data_keys: Object.keys(data.scatter_data || {}),
         feature_importance_keys: Object.keys(data.feature_importance || {}),
+        model_files_saved: data.model_files_saved,
       });
 
-      setProcessEachData(data);
+      setAnalysisData(data);
       
       // Also fetch heatmap data
       fetchHeatmapData(folderName, maxDistance);
     } catch (error) {
-      console.error('Error fetching process-each data:', error);
+      console.error('Error fetching analyze-whole data:', error);
       // Set error state or show user-friendly error
       alert(`API接続エラー: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsAnalyzing(false);
     }
-  }, [model, folderName, maxDistance, dataType, predictionTD, fetchHeatmapData]);
+  }, [model, folderName, maxDistance, predictionTD, fetchHeatmapData]);
 
   const handleAnalyze = () => {
-    fetchProcessEachData();
+    fetchAnalysisData();
   };
 
   return {
@@ -244,6 +247,6 @@ export function useLearning() {
     validationMSEA,
     validationMSEB,
     handleAnalyze,
-    processEachData,
+    analysisData,
   };
 }

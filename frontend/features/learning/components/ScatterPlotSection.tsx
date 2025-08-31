@@ -25,7 +25,8 @@ export function ScatterPlotSection({ title, data, rSquared, mse, xLabel, yLabel 
   const maxVal = hasValidData ? Math.max(...allValues) : 1;
 
   // Format number to 2 significant digits
-  const formatToTwoDigits = (value: number) => {
+  const formatToTwoDigits = (value: number | undefined) => {
+    if (value === undefined || value === null || isNaN(value)) return 'N/A';
     return parseFloat(value.toPrecision(2));
   };
 

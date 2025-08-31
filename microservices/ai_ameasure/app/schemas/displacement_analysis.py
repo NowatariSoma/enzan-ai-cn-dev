@@ -13,7 +13,7 @@ class WholeAnalysisRequest(BaseModel):
     """全体分析リクエスト"""
     folder_name: str
     model_name: str
-    td: float = 500
+    td: Optional[float] = None
     max_distance_from_face: float = 100
 
 class WholeAnalysisResponse(BaseModel):

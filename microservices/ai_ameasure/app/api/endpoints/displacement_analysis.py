@@ -27,23 +27,31 @@ from sklearn.neural_network import MLPRegressor
 from app.core.config import settings
 from app.schemas import displacement_analysis as schemas
 
-# ai_ameasureパッケージから直接関数をインポート
-sys.path.append('/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure')
-from app.displacement_temporal_spacial_analysis import (
-    analyze_displacement,
-    generate_dataframes,
-    generate_additional_info_df,
-    create_dataset,
-    Y_COLUMNS,
-    STA,
-    DISTANCE_FROM_FACE,
-    TD_NO,
-    DATE,
-    DISTANCES_FROM_FACE,
-    SETTLEMENTS,
-    CONVERGENCES
-)
-from app.displacement import DURATION_DAYS
+# Streamlitプロジェクトから直接インポート
+import importlib.util
+spec = importlib.util.spec_from_file_location("streamlit_displacement", "/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure/app/displacement_temporal_spacial_analysis.py")
+streamlit_displacement = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(streamlit_displacement)
+
+# Streamlitの関数を直接参照
+analyze_displacement = streamlit_displacement.analyze_displacement
+generate_dataframes = streamlit_displacement.generate_dataframes
+generate_additional_info_df = streamlit_displacement.generate_additional_info_df
+create_dataset = streamlit_displacement.create_dataset
+Y_COLUMNS = streamlit_displacement.Y_COLUMNS
+STA = streamlit_displacement.STA
+DISTANCE_FROM_FACE = streamlit_displacement.DISTANCE_FROM_FACE
+TD_NO = streamlit_displacement.TD_NO
+DATE = streamlit_displacement.DATE
+DISTANCES_FROM_FACE = streamlit_displacement.DISTANCES_FROM_FACE
+SETTLEMENTS = streamlit_displacement.SETTLEMENTS
+CONVERGENCES = streamlit_displacement.CONVERGENCES
+
+# displacement.pyもStreamlitから
+spec2 = importlib.util.spec_from_file_location("streamlit_displ", "/home/nowatari/repos/enzan-ai-cn-dev/ai_ameasure/app/displacement.py")
+streamlit_displ = importlib.util.module_from_spec(spec2)
+spec2.loader.exec_module(streamlit_displ)
+DURATION_DAYS = streamlit_displ.DURATION_DAYS
 
 
 logger = logging.getLogger(__name__)
