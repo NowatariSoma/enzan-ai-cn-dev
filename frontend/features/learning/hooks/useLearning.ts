@@ -60,58 +60,89 @@ export function useLearning() {
     return data;
   };
 
-  // Transform scatter data from new API format
-  const transformScatterData = (scatterData: any) => {
-    if (!scatterData || !scatterData.train_actual || !scatterData.train_predictions) return [];
+  // Transform scatter data from new API format (settlement/convergence separated)
+  const transformScatterData = (scatterSubData: any) => {
+    if (!scatterSubData || !scatterSubData.train_actual || !scatterSubData.train_predictions) return [];
     
-    return scatterData.train_actual.map((actualValue: number, index: number) => ({
+    return scatterSubData.train_actual.map((actualValue: number, index: number) => ({
       actual: actualValue,
-      predicted: scatterData.train_predictions[index] || 0,
+      predicted: scatterSubData.train_predictions[index] || 0,
     }));
   };
   
-  const transformValidationScatterData = (scatterData: any) => {
-    if (!scatterData || !scatterData.validate_actual || !scatterData.validate_predictions) return [];
+  const transformValidationScatterData = (scatterSubData: any) => {
+    if (!scatterSubData || !scatterSubData.validate_actual || !scatterSubData.validate_predictions) return [];
     
-    return scatterData.validate_actual.map((actualValue: number, index: number) => ({
+    return scatterSubData.validate_actual.map((actualValue: number, index: number) => ({
       actual: actualValue,
-      predicted: scatterData.validate_predictions[index] || 0,
+      predicted: scatterSubData.validate_predictions[index] || 0,
     }));
   };
 
 
   const chartData = useMemo(() => generateChartData(), []);
   
-  // Use actual data from analyze-whole endpoint if available, otherwise use mock data
-  const trainScatterData = useMemo(() => {
-    if (analysisData?.scatter_data) {
-      return transformScatterData(analysisData.scatter_data);
+  // Settlement scatter data (A)
+  const trainScatterDataSettlement = useMemo(() => {
+    if (analysisData?.scatter_data?.settlement) {
+      return transformScatterData(analysisData.scatter_data.settlement);
     }
     return [];
   }, [analysisData]);
 
-  const validationScatterData = useMemo(() => {
-    if (analysisData?.scatter_data) {
-      return transformValidationScatterData(analysisData.scatter_data);
+  const validationScatterDataSettlement = useMemo(() => {
+    if (analysisData?.scatter_data?.settlement) {
+      return transformValidationScatterData(analysisData.scatter_data.settlement);
+    }
+    return [];
+  }, [analysisData]);
+
+  // Convergence scatter data (B)
+  const trainScatterDataConvergence = useMemo(() => {
+    if (analysisData?.scatter_data?.convergence) {
+      return transformScatterData(analysisData.scatter_data.convergence);
+    }
+    return [];
+  }, [analysisData]);
+
+  const validationScatterDataConvergence = useMemo(() => {
+    if (analysisData?.scatter_data?.convergence) {
+      return transformValidationScatterData(analysisData.scatter_data.convergence);
     }
     return [];
   }, [analysisData]);
 
   const featureImportanceData = useMemo(() => {
     if (analysisData?.feature_importance) {
-      return Object.entries(analysisData.feature_importance)
-        .map(([feature, importance]) => ({ feature, importance: Number(importance) }))
-        .sort((a, b) => b.importance - a.importance)
-        .slice(0, 10); // Top 10 features
+      const featureImportance = analysisData.feature_importance;
+      
+      // Check if it's the new format with feature_names and importance_values arrays
+      if (featureImportance.feature_names && featureImportance.importance_values) {
+        return featureImportance.feature_names
+          .map((feature: string, index: number) => ({
+            feature,
+            importance: Number(featureImportance.importance_values[index] || 0)
+          }))
+          .sort((a: any, b: any) => b.importance - a.importance)
+          .slice(0, 10); // Top 10 features
+      }
+      
+      // Fallback to old format
+      if (typeof featureImportance === 'object') {
+        return Object.entries(featureImportance)
+          .map(([feature, importance]) => ({ feature, importance: Number(importance) }))
+          .sort((a, b) => b.importance - a.importance)
+          .slice(0, 10);
+      }
     }
     return []; // Return empty array instead of mock data
   }, [analysisData]);
 
-  // For backward compatibility with dual charts (A and B)
-  const trainScatterDataA = trainScatterData;
-  const trainScatterDataB = trainScatterData;
-  const validationScatterDataA = validationScatterData;
-  const validationScatterDataB = validationScatterData;
+  // Map settlement and convergence data to A and B charts
+  const trainScatterDataA = trainScatterDataSettlement;
+  const trainScatterDataB = trainScatterDataConvergence;
+  const validationScatterDataA = validationScatterDataSettlement;
+  const validationScatterDataB = validationScatterDataConvergence;
   const featureImportanceA = featureImportanceData;
   const featureImportanceB = featureImportanceData;
   
@@ -120,34 +151,39 @@ export function useLearning() {
   const heatmapDataB = { data: heatmapData, features };
 
   // Metrics from analyze-whole endpoint  
-  // Get metrics from training_metrics with Japanese keys
-  const getMetricsFromTrainingData = () => {
-    if (!analysisData?.training_metrics) {
-      return { mse_train: 0, r2_train: 0, mse_validate: 0, r2_validate: 0 };
+  // Get settlement metrics directly from scatter_data.settlement.metrics
+  const getSettlementMetrics = () => {
+    if (analysisData?.scatter_data?.settlement?.metrics) {
+      const metrics = analysisData.scatter_data.settlement.metrics;
+      // Use 'final' metrics if available, otherwise use 'current'
+      return metrics.final || metrics.current || { mse_train: 0, r2_train: 0, mse_validate: 0, r2_validate: 0 };
     }
-    
-    // Try to get metrics from the first available data type
-    const trainingMetrics = analysisData.training_metrics;
-    const firstKey = Object.keys(trainingMetrics)[0];
-    
-    if (firstKey && trainingMetrics[firstKey]) {
-      return trainingMetrics[firstKey];
+    return { mse_train: 0, r2_train: 0, mse_validate: 0, r2_validate: 0 };
+  };
+
+  // Get convergence metrics directly from scatter_data.convergence.metrics
+  const getConvergenceMetrics = () => {
+    if (analysisData?.scatter_data?.convergence?.metrics) {
+      const metrics = analysisData.scatter_data.convergence.metrics;
+      // Use 'final' metrics if available, otherwise use 'current'
+      return metrics.final || metrics.current || { mse_train: 0, r2_train: 0, mse_validate: 0, r2_validate: 0 };
     }
-    
     return { mse_train: 0, r2_train: 0, mse_validate: 0, r2_validate: 0 };
   };
   
-  const trainMetrics = getMetricsFromTrainingData();
+  const settlementMetrics = getSettlementMetrics();
+  const convergenceMetrics = getConvergenceMetrics();
   
-  const trainRSquaredA = trainMetrics.r2_train;
-  const trainRSquaredB = trainMetrics.r2_train;
-  const validationRSquaredA = trainMetrics.r2_validate;
-  const validationRSquaredB = trainMetrics.r2_validate;
+  // Separate metrics for settlement (A) and convergence (B)
+  const trainRSquaredA = settlementMetrics.r2_train;
+  const trainRSquaredB = convergenceMetrics.r2_train;
+  const validationRSquaredA = settlementMetrics.r2_validate;
+  const validationRSquaredB = convergenceMetrics.r2_validate;
   
-  const trainMSEA = trainMetrics.mse_train;
-  const trainMSEB = trainMetrics.mse_train;
-  const validationMSEA = trainMetrics.mse_validate;
-  const validationMSEB = trainMetrics.mse_validate;
+  const trainMSEA = settlementMetrics.mse_train;
+  const trainMSEB = convergenceMetrics.mse_train;
+  const validationMSEA = settlementMetrics.mse_validate;
+  const validationMSEB = convergenceMetrics.mse_validate;
 
   // Fetch data from analyze-whole endpoint
   const fetchAnalysisData = useCallback(async () => {

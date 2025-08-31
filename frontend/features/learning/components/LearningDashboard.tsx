@@ -238,12 +238,12 @@ export function LearningDashboard() {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Feature Importance</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <FeatureImportanceSection
-            title={`Feature Importance for ${dataType === 'settlement' ? '沈下量' : '変位量'}A`}
+            title="Feature Importance for 沈下量"
             data={featureImportanceA}
           />
           
           <FeatureImportanceSection
-            title={`Feature Importance for ${dataType === 'settlement' ? '沈下量' : '変位量'}B`}
+            title="Feature Importance for 変位量"
             data={featureImportanceB}
           />
         </div>

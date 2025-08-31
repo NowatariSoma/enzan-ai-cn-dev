@@ -468,26 +468,38 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
     # with concurrent.futures.ThreadPoolExecutor() as executor:
     #     futures = [executor.submit(process_each, distance, i) for i, distance in enumerate(DISTANCE_FROM_FACE)]
     #     concurrent.futures.wait(futures)
-    # 散布図データを収集して返す
+    # 散布図データを沈下量と変位量で分けて収集
     training_metrics = {}
     scatter_data = {
-        'train_actual': [],
-        'train_predictions': [], 
-        'validate_actual': [],
-        'validate_predictions': [],
-        'metrics': {}
+        'settlement': {
+            'train_actual': [],
+            'train_predictions': [], 
+            'validate_actual': [],
+            'validate_predictions': [],
+            'metrics': {}
+        },
+        'convergence': {
+            'train_actual': [],
+            'train_predictions': [], 
+            'validate_actual': [],
+            'validate_predictions': [],
+            'metrics': {}
+        }
     }
     
+    data_types = ['settlement', 'convergence']
     for i, (df, x_columns, y_column) in enumerate([settlement_data, convergence_data]):
+        data_type = data_types[i]
+        
         # 最終変位量、沈下量モデル
         model, scatter_info = process_each(model, df, x_columns, y_column, td)
         joblib.dump(model, model_paths["final_value_prediction_model"][i])
         
-        # 散布図データを収集
-        scatter_data['train_actual'].extend(scatter_info['train_actual'])
-        scatter_data['train_predictions'].extend(scatter_info['train_predictions'])
-        scatter_data['validate_actual'].extend(scatter_info['validate_actual'])
-        scatter_data['validate_predictions'].extend(scatter_info['validate_predictions'])
+        # 散布図データを分けて収集（最終値）
+        scatter_data[data_type]['train_actual'].extend(scatter_info['train_actual'])
+        scatter_data[data_type]['train_predictions'].extend(scatter_info['train_predictions'])
+        scatter_data[data_type]['validate_actual'].extend(scatter_info['validate_actual'])
+        scatter_data[data_type]['validate_predictions'].extend(scatter_info['validate_predictions'])
         training_metrics[y_column] = scatter_info['metrics']
         
         # 変位量、沈下量モデル
@@ -496,16 +508,21 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
         model, scatter_info = process_each(model, df, x_columns, y_column, td)
         joblib.dump(model, model_paths["prediction_model"][i])
         
-        # 散布図データを収集
-        scatter_data['train_actual'].extend(scatter_info['train_actual'])
-        scatter_data['train_predictions'].extend(scatter_info['train_predictions'])
-        scatter_data['validate_actual'].extend(scatter_info['validate_actual'])
-        scatter_data['validate_predictions'].extend(scatter_info['validate_predictions'])
+        # 散布図データを分けて収集（通常値）
+        # 別のメトリクスとして保存
+        scatter_data[data_type]['metrics'] = {
+            'final': training_metrics[list(training_metrics.keys())[-1]],  # 最終値のメトリクス
+            'current': scatter_info['metrics']  # 現在値のメトリクス
+        }
         training_metrics[y_column] = scatter_info['metrics']
     
     # 散布図データは既に上で収集済み（CSVファイルは使わない）
     
-    print(f"Final scatter data collected - train: {len(scatter_data['train_actual'])}, validate: {len(scatter_data['validate_actual'])}")
+    settlement_train = len(scatter_data['settlement']['train_actual'])
+    settlement_validate = len(scatter_data['settlement']['validate_actual'])
+    convergence_train = len(scatter_data['convergence']['train_actual'])
+    convergence_validate = len(scatter_data['convergence']['validate_actual'])
+    print(f"Final scatter data collected - settlement train: {settlement_train}, validate: {settlement_validate}, convergence train: {convergence_train}, validate: {convergence_validate}")
     print(f"Training metrics keys: {list(training_metrics.keys())}")
     
     return df_all, training_metrics, scatter_data
