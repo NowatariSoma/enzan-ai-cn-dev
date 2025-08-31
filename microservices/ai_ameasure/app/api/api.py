@@ -4,6 +4,7 @@ from app.api.endpoints import (
     charts,
     csv_processing,
     displacement,
+    displacement_analysis,
     locations,
     measurements,
     models,
@@ -36,3 +37,5 @@ api_router.include_router(charts.router, prefix="/charts", tags=["charts", "visu
 api_router.include_router(cache_management.router, prefix="/cache", tags=["cache-management"])
 
 api_router.include_router(locations.router, tags=["locations"])
+
+api_router.include_router(displacement_analysis.router, prefix="/displacement-analysis", tags=["displacement-analysis", "machine-learning"])

@@ -471,6 +471,3 @@ async def process_each(request: schemas.ProcessEachRequest) -> schemas.ProcessEa
         train_actual=train_actual,
         validate_actual=validate_actual,
     )
-
-
-# フォールバック関数は完全削除 - 高精度アルゴリズムのみ使用

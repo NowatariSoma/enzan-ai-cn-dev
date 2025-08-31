@@ -1,0 +1,55 @@
+================================================================================
+STREAMLIT vs API COMPARISON REPORT
+================================================================================
+
+📋 EXECUTION INFO
+----------------------------------------
+Folder: 01-hokkaido-akan
+Model: Random Forest
+TD: 500
+Max Distance: 100
+
+📊 METRICS COMPARISON
+----------------------------------------
+✅ METRICS MATCH PERFECTLY!
+
+📈 SETTLEMENT METRICS
+----------------------------------------
+✅ r2_train:
+  Streamlit: 0.932504582875139
+  API:       0.932504582875139
+✅ r2_validate:
+  Streamlit: 0.8967488519849451
+  API:       0.8967488519849451
+✅ mse_train:
+  Streamlit: 2.1281310842983836
+  API:       2.1281310842983836
+✅ mse_validate:
+  Streamlit: 1.104597403110503
+  API:       1.104597403110503
+
+📈 CONVERGENCE METRICS
+----------------------------------------
+✅ r2_train:
+  Streamlit: 0.8900206903911303
+  API:       0.8900206903911303
+✅ r2_validate:
+  Streamlit: 0.9035704177656063
+  API:       0.9035704177656063
+✅ mse_train:
+  Streamlit: 0.8579944906364112
+  API:       0.8579944906364112
+❌ mse_validate:
+  Streamlit: 0.4830333109742189
+  API:       0.4830333109742188
+
+📁 MODEL FILES CHECK
+----------------------------------------
+✅ ALL REQUIRED MODEL FILES PRESENT!
+Present model files:
+  ✅ model_final_settlement.pkl
+  ✅ model_final_convergence.pkl
+  ✅ model_settlement.pkl
+  ✅ model_convergence.pkl
+
+================================================================================

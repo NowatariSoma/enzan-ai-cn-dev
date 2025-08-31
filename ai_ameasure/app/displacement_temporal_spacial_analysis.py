@@ -246,13 +246,26 @@ def create_dataset(df, df_additional_info):
     return settlement, convergence
 
 def analyize_ml(model, df_train, df_validate, x_columns, y_column):
+    print(f"DEBUG analyize_ml: Starting with model {type(model).__name__}")
+    print(f"DEBUG analyize_ml: Train shape {df_train.shape}, Validate shape {df_validate.shape}")
+    print(f"DEBUG analyize_ml: Features: {len(x_columns)}, Target: {y_column}")
 
     try:
+        print(f"DEBUG analyize_ml: Fitting model {type(model).__name__}")
         model.fit(df_train[x_columns], df_train[y_column])
+        print(f"DEBUG analyize_ml: Model fitted successfully")
+        
+        print(f"DEBUG analyize_ml: Making predictions")
         y_pred_train = model.predict(df_train[x_columns])
         y_pred_validate = model.predict(df_validate[x_columns])
-    except ValueError as e:
-        print(f"Error fitting model: {e}")
+        print(f"DEBUG analyize_ml: Predictions completed")
+        
+    except Exception as e:
+        print(f"ERROR analyize_ml: Error fitting/predicting model: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+        
     # Evaluate the model
     mse_train = mean_squared_error(df_train[y_column].values, y_pred_train)
     r2_train = r2_score(df_train[y_column].values, y_pred_train)
@@ -273,6 +286,8 @@ def analyize_ml(model, df_train, df_validate, x_columns, y_column):
         'mse_validate': mse_validate,
         'r2_validate': r2_validate
     }
+    
+    print(f"DEBUG analyize_ml: Completed successfully for {type(model).__name__}")
     return df_train, df_validate, model, metrics
 
 def draw_scatter_plot_distance_days_convergences(output_path, df_all, values, label):
@@ -326,6 +341,7 @@ def generate_dataframes(measurement_a_csvs, max_distance_from_face):
     return df_all, dct_df_settlement, dct_df_convergence, dct_df_td, settlements, convergences
 
 def analyze_displacement(input_folder, output_path, model_paths, model, max_distance_from_face, td=None):
+    print(f"DEBUG: Starting analyze_displacement with model {type(model).__name__}")
     
     os.makedirs(output_path, exist_ok=True)
     # Get all CSV files in the input folder
@@ -348,14 +364,23 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
     
     # analyize the final displacement data
     def process_each(model, df, x_columns, y_column, td):
+        print(f"DEBUG process_each: Processing {y_column} with model {type(model).__name__}")
         try:
+            print(f"DEBUG process_each: Drawing heatmap for {y_column}")
             draw_heatmap(os.path.join(output_path, f"heatmap_{y_column}.png"), df[x_columns + [y_column]])
+            
             if td is None:
                 td = df[SECTION_TD].max()
+            print(f"DEBUG process_each: Using TD = {td}")
+            
             train_date = df[df[SECTION_TD] < td][DATE].max()
             df_train = df[df[DATE] <= train_date]
             df_validate = df[df[SECTION_TD] >= td]
+            print(f"DEBUG process_each: Train data: {df_train.shape}, Validate data: {df_validate.shape}")
+            
+            print(f"DEBUG process_each: Calling analyize_ml for {y_column}")
             df_train, df_validate, model, metrics = analyize_ml(model, df_train, df_validate, x_columns, y_column)
+            print(f"DEBUG process_each: analyize_ml completed for {y_column}")
             # Scatter plot of actual vs predicted values for training data
             def draw_scatter_plot(output_path, gt, pred, label, text):
                 plt.figure(figsize=(8, 8))
@@ -380,41 +405,69 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
             df_result = pd.concat([df_train, df_validate])
 
             def draw_feature_importance(output_path, model, x_columns):
-                plt.figure(figsize=(10, 6))
-                feature_importances = model.feature_importances_
-                indices = np.argsort(feature_importances)[::-1]
-                plt.bar(range(len(x_columns)), feature_importances[indices], align='center')
-                plt.xticks(range(len(x_columns)), [x_columns[i] for i in indices], rotation=90)
-                plt.title(f"Feature Importances for {y_column}")
-                plt.xlabel("Features")
-                plt.ylabel("Importance")
-                plt.tight_layout()
-                plt.savefig(output_path)
-                plt.close()
-            draw_feature_importance(os.path.join(output_path, f"feature_importance_{y_column}.png"), model, x_columns)
+                # feature_importances_属性があるモデルのみ対象
+                print(f"DEBUG: Checking feature importance for model {type(model).__name__}")
+                print(f"DEBUG: Model has feature_importances_: {hasattr(model, 'feature_importances_')}")
+                
+                try:
+                    if hasattr(model, 'feature_importances_'):
+                        print(f"DEBUG: Accessing feature_importances_ for {type(model).__name__}")
+                        plt.figure(figsize=(10, 6))
+                        feature_importances = model.feature_importances_
+                        print(f"DEBUG: Feature importances shape: {feature_importances.shape}")
+                        indices = np.argsort(feature_importances)[::-1]
+                        plt.bar(range(len(x_columns)), feature_importances[indices], align='center')
+                        plt.xticks(range(len(x_columns)), [x_columns[i] for i in indices], rotation=90)
+                        plt.title(f"Feature Importances for {y_column}")
+                        plt.xlabel("Features")
+                        plt.ylabel("Importance")
+                        plt.tight_layout()
+                        plt.savefig(output_path)
+                        plt.close()
+                        print(f"DEBUG: Feature importance plot saved successfully")
+                    else:
+                        print(f"Model {type(model).__name__} does not have feature_importances_ attribute. Skipping feature importance plot.")
+                except Exception as e:
+                    print(f"DEBUG: Error in draw_feature_importance: {e}")
+                    print(f"DEBUG: Model type: {type(model)}")
+                    print(f"DEBUG: Model attributes: {[attr for attr in dir(model) if not attr.startswith('_')]}")
+            
+            try:
+                draw_feature_importance(os.path.join(output_path, f"feature_importance_{y_column}.png"), model, x_columns)
+            except Exception as e:
+                print(f"ERROR: Feature importance drawing failed: {e}")
 
             #draw_shap(output_path, model, df_data_only, Y_COLUMNS, f"{day}days")
             # Draw charts comparing '沈下量1' and '沈下量1_pred'
             #draw_prediction_chart(os.path.join(output_path, f"comparison_{y_column}.png"), df_result, y_column)
             df_result.to_csv(os.path.join(output_path, f"result{y_column}.csv"))
+            
+            # 散布図データを直接収集
+            scatter_info = {
+                'train_actual': df_train[y_column].tolist(),
+                'train_predictions': df_train['pred'].tolist(),  # 修正: 'pred'カラムを使用
+                'validate_actual': df_validate[y_column].tolist(),
+                'validate_predictions': df_validate['pred'].tolist(),  # 修正: 'pred'カラムを使用
+                'metrics': metrics
+            }
 
-            return model
+            return model, scatter_info
         except Exception as e:
             print(f"Error processing each {y_column}m: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return default values on error
+            return model, {
+                'train_actual': [],
+                'train_predictions': [],
+                'validate_actual': [],
+                'validate_predictions': [],
+                'metrics': {}
+            }
 
     # with concurrent.futures.ThreadPoolExecutor() as executor:
     #     futures = [executor.submit(process_each, distance, i) for i, distance in enumerate(DISTANCE_FROM_FACE)]
     #     concurrent.futures.wait(futures)
-    for i, (df, x_columns, y_column) in enumerate([settlement_data, convergence_data]):
-        # 最終変位量、沈下量モデル
-        model = process_each(model, df, x_columns, y_column, td)
-        joblib.dump(model, model_paths["final_value_prediction_model"][i])
-        # 変位量、沈下量モデル
-        y_column = x_columns[2]
-        x_columns = [x for x in x_columns if x != y_column]
-        model = process_each(model, df, x_columns, y_column, td)
-        joblib.dump(model, model_paths["prediction_model"][i])
-    
     # 散布図データを収集して返す
     training_metrics = {}
     scatter_data = {
@@ -425,81 +478,32 @@ def analyze_displacement(input_folder, output_path, model_paths, model, max_dist
         'metrics': {}
     }
     
-    # settlementデータの結果を読み込み
-    try:
-        settlement_result_csv = os.path.join(output_path, f"result最終沈下量との差分.csv")
-        print(f"Looking for settlement result CSV at: {settlement_result_csv}")
-        print(f"File exists: {os.path.exists(settlement_result_csv)}")
+    for i, (df, x_columns, y_column) in enumerate([settlement_data, convergence_data]):
+        # 最終変位量、沈下量モデル
+        model, scatter_info = process_each(model, df, x_columns, y_column, td)
+        joblib.dump(model, model_paths["final_value_prediction_model"][i])
         
-        if os.path.exists(settlement_result_csv):
-            settlement_df = pd.read_csv(settlement_result_csv)
-            print(f"Settlement CSV shape: {settlement_df.shape}")
-            print(f"Settlement CSV columns: {settlement_df.columns.tolist()}")
-            
-            settlement_train = settlement_df[settlement_df['mode'] == 'train']
-            settlement_validate = settlement_df[settlement_df['mode'] == 'validate']
-            print(f"Train data shape: {settlement_train.shape}")
-            print(f"Validate data shape: {settlement_validate.shape}")
-            
-            if not settlement_train.empty and not settlement_validate.empty:
-                y_col = '最終沈下量との差分'
-                scatter_data['train_actual'].extend(settlement_train[y_col].tolist())
-                scatter_data['train_predictions'].extend(settlement_train['pred'].tolist())
-                scatter_data['validate_actual'].extend(settlement_validate[y_col].tolist())
-                scatter_data['validate_predictions'].extend(settlement_validate['pred'].tolist())
-                
-                print(f"Collected scatter data - train: {len(scatter_data['train_actual'])}, validate: {len(scatter_data['validate_actual'])}")
-                
-                # メトリクスも計算
-                training_metrics['最終沈下量との差分'] = {
-                    'mse_train': mean_squared_error(settlement_train[y_col], settlement_train['pred']),
-                    'r2_train': r2_score(settlement_train[y_col], settlement_train['pred']),
-                    'mse_validate': mean_squared_error(settlement_validate[y_col], settlement_validate['pred']),
-                    'r2_validate': r2_score(settlement_validate[y_col], settlement_validate['pred'])
-                }
-                print(f"Settlement metrics: {training_metrics['最終沈下量との差分']}")
-        else:
-            print(f"Settlement result CSV not found")
-                
-    except Exception as e:
-        print(f"Error reading settlement results: {e}")
-        import traceback
-        traceback.print_exc()
+        # 散布図データを収集
+        scatter_data['train_actual'].extend(scatter_info['train_actual'])
+        scatter_data['train_predictions'].extend(scatter_info['train_predictions'])
+        scatter_data['validate_actual'].extend(scatter_info['validate_actual'])
+        scatter_data['validate_predictions'].extend(scatter_info['validate_predictions'])
+        training_metrics[y_column] = scatter_info['metrics']
+        
+        # 変位量、沈下量モデル
+        y_column = x_columns[2]
+        x_columns = [x for x in x_columns if x != y_column]
+        model, scatter_info = process_each(model, df, x_columns, y_column, td)
+        joblib.dump(model, model_paths["prediction_model"][i])
+        
+        # 散布図データを収集
+        scatter_data['train_actual'].extend(scatter_info['train_actual'])
+        scatter_data['train_predictions'].extend(scatter_info['train_predictions'])
+        scatter_data['validate_actual'].extend(scatter_info['validate_actual'])
+        scatter_data['validate_predictions'].extend(scatter_info['validate_predictions'])
+        training_metrics[y_column] = scatter_info['metrics']
     
-    # convergenceデータの結果も読み込み
-    try:
-        convergence_result_csv = os.path.join(output_path, f"result最終変位量との差分.csv")
-        print(f"Looking for convergence result CSV at: {convergence_result_csv}")
-        
-        if os.path.exists(convergence_result_csv):
-            convergence_df = pd.read_csv(convergence_result_csv)
-            print(f"Convergence CSV shape: {convergence_df.shape}")
-            
-            convergence_train = convergence_df[convergence_df['mode'] == 'train']
-            convergence_validate = convergence_df[convergence_df['mode'] == 'validate']
-            print(f"Convergence - Train: {convergence_train.shape}, Validate: {convergence_validate.shape}")
-            
-            if not convergence_train.empty and not convergence_validate.empty:
-                y_col = '最終変位量との差分'
-                # convergenceデータも散布図データに追加（settlementデータに追加）
-                scatter_data['train_actual'].extend(convergence_train[y_col].tolist())
-                scatter_data['train_predictions'].extend(convergence_train['pred'].tolist())
-                scatter_data['validate_actual'].extend(convergence_validate[y_col].tolist())
-                scatter_data['validate_predictions'].extend(convergence_validate['pred'].tolist())
-                
-                # メトリクスも計算
-                training_metrics['最終変位量との差分'] = {
-                    'mse_train': mean_squared_error(convergence_train[y_col], convergence_train['pred']),
-                    'r2_train': r2_score(convergence_train[y_col], convergence_train['pred']),
-                    'mse_validate': mean_squared_error(convergence_validate[y_col], convergence_validate['pred']),
-                    'r2_validate': r2_score(convergence_validate[y_col], convergence_validate['pred'])
-                }
-                print(f"Convergence metrics: {training_metrics['最終変位量との差分']}")
-                
-    except Exception as e:
-        print(f"Error reading convergence results: {e}")
-        import traceback
-        traceback.print_exc()
+    # 散布図データは既に上で収集済み（CSVファイルは使わない）
     
     print(f"Final scatter data collected - train: {len(scatter_data['train_actual'])}, validate: {len(scatter_data['validate_actual'])}")
     print(f"Training metrics keys: {list(training_metrics.keys())}")
