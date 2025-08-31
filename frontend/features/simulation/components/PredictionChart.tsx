@@ -153,7 +153,16 @@ export function PredictionChart({
               
               {dataSeries.map((series, seriesIndex) =>
                 series.columns.map((column, columnIndex) => {
-                  const color = series.color || colors[colorIndex % colors.length];
+                  // Determine color based on A, B, C pattern or numeric pattern to match 最終変位量 colors
+                  let color = series.color || colors[colorIndex % colors.length];
+                  if (column.includes('A') || column.includes('1')) {
+                    color = "#3B82F6"; // Blue for A or 1
+                  } else if (column.includes('B') || column.includes('2')) {
+                    color = "#F59E0B"; // Orange for B or 2
+                  } else if (column.includes('C') || column.includes('3')) {
+                    color = "#10B981"; // Green for C or 3
+                  }
+                  
                   const key = `${series.name}_${column}`;
                   
                   colorIndex++;
