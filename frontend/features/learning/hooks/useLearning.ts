@@ -213,16 +213,18 @@ export function useLearning() {
     });
 
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const API_BASE_URL = '/api/v1'; // Use Next.js rewrites for API proxy
       
-      // AbortControllerを使用してタイムアウトを5分に設定
+      // AbortControllerを使用してタイムアウトを10分に設定し、追加のヘッダーを設定
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5分
+      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10分
       
       const response = await fetch(`${API_BASE_URL}/displacement-analysis/analyze-whole`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
         },
         body: JSON.stringify({
           model_name: model,

@@ -1,5 +1,8 @@
 'use client';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 import { AppTemplate } from '@/shared/components/layout/AppTemplate';
 import { BarChart3 } from 'lucide-react';
 import { MeasurementsPage } from '@/features/measurements/components/MeasurementsPage';

@@ -1,6 +1,6 @@
 // API client for locations endpoints
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = '/api/v1'; // Use Next.js rewrites for API proxy
 
 // フロントエンド用インターフェース（既存のモックデータと互換性を保つ）
 export interface AvailableFeatures {
@@ -59,10 +59,10 @@ export interface LocationAPIResponse {
   alert_level: 'normal' | 'warning' | 'danger';
   latitude: number | null;
   longitude: number | null;
-  coordinates: {
+  coordinates?: {
     lat: number;
     lng: number;
-  } | null;
+  };
   available_features: AvailableFeatures;
   lastUpdated: string;
   user_count: number;
@@ -76,14 +76,20 @@ export class LocationsAPI {
   private baseUrl: string;
 
   constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl || 'http://localhost:8000/api/v1';
+    this.baseUrl = baseUrl;
     console.log('LocationsAPI initialized with baseUrl:', this.baseUrl);
   }
 
   async getLocations(): Promise<Location[]> {
     console.log('Fetching locations from:', `${this.baseUrl}/locations`);
     try {
-      const response = await fetch(`${this.baseUrl}/locations`);
+      const response = await fetch(`${this.baseUrl}/locations`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+      
       console.log('Response status:', response.status);
       if (!response.ok) {
         throw new Error(`Failed to fetch locations: ${response.status} ${response.statusText}`);
@@ -120,7 +126,7 @@ export class LocationsAPI {
   private transformLocationResponse(apiResponse: LocationAPIResponse): Location {
     return {
       id: apiResponse.location_id || apiResponse.id.toString(), // フロントエンド用のIDはlocation_idを使用、なければid
-      location_id: apiResponse.location_id,
+      location_id: apiResponse.location_id || undefined,
       name: apiResponse.name,
       region: apiResponse.region || '',
       prefecture: apiResponse.prefecture || '',
@@ -134,7 +140,7 @@ export class LocationsAPI {
       lastUpdated: apiResponse.lastUpdated || apiResponse.updated_at,
       measurementCount: apiResponse.measurement_count || 0,
       alertLevel: apiResponse.alert_level,
-      coordinates: apiResponse.coordinates,
+      coordinates: apiResponse.coordinates || undefined,
       availableFeatures: apiResponse.available_features || {
         aiMeasurement: false,
         measurement: false,

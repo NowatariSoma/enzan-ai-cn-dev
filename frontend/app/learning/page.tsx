@@ -1,5 +1,8 @@
 'use client';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 import { AppTemplate } from '@/shared/components/layout/AppTemplate';
 import { Brain } from 'lucide-react';
 import { LearningPage } from '@/features/learning/components/LearningPage';

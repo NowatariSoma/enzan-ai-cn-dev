@@ -13,7 +13,7 @@ interface DatasetResponse {
   convergence_data: Record<string, any>[];
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = '/api/v1'; // Use Next.js rewrites for API proxy
 
 export function useHeatmap() {
   const [heatmapData, setHeatmapData] = useState<HeatmapData[]>([]);

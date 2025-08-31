@@ -87,12 +87,13 @@ class LocationListSerializer(ModelSerializer):
     def _get_frontend_feature_key(self, feature_type):
         """バックエンドの機能タイプをフロントエンドのキーにマッピング"""
         mapping = {
-            'ai_measurement': 'aiMeasurement',
-            'data_analysis': 'measurement',
+            'ai_a_measurement': 'aiMeasurement',  # 親のAI-A計測機能
+            'measurement': 'measurement',  # A計測集計
+            'simulation': 'simulation',  # 最終変位・沈下予測
+            'modelCreation': 'modelCreation',  # 予測モデル作成
             'reporting': 'reportGeneration',
             'user_management': 'userManagement',
             'location_management': 'locationManagement',
-            'custom': 'simulation',  # カスタム機能をシミュレーションにマッピング
         }
         return mapping.get(feature_type)
 
@@ -142,12 +143,13 @@ class LocationDetailSerializer(ModelSerializer):
     def _get_frontend_feature_key(self, feature_type):
         """バックエンドの機能タイプをフロントエンドのキーにマッピング"""
         mapping = {
-            'ai_measurement': 'aiMeasurement',
-            'data_analysis': 'measurement',
+            'ai_a_measurement': 'aiMeasurement',  # 親のAI-A計測機能
+            'measurement': 'measurement',  # A計測集計
+            'simulation': 'simulation',  # 最終変位・沈下予測
+            'modelCreation': 'modelCreation',  # 予測モデル作成
             'reporting': 'reportGeneration',
             'user_management': 'userManagement',
             'location_management': 'locationManagement',
-            'custom': 'simulation',  # カスタム機能をシミュレーションにマッピング
         }
         return mapping.get(feature_type)
     

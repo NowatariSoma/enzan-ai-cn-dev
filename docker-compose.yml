@@ -11,6 +11,11 @@ services:
       - '3306:3306'
     networks:
       - mlp_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pmysql_pass"]
+      timeout: 10s
+      retries: 10
+      interval: 30s
 
   admin:
     build: 
@@ -32,17 +37,23 @@ services:
     ports:
       - '8080:8080'
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - mlp_network
     volumes:
       - ./admin:/app
     command: >
-      sh -c "python manage.py migrate &&
-             python manage.py create_superuser &&
-             python manage.py seed_locations &&
-             python manage.py seed_features &&
-             python run.py runserver 0.0.0.0:8080"
+      sh -c "
+        echo 'Waiting for MySQL to be ready...' &&
+        while ! nc -z db 3306; do sleep 1; done &&
+        echo 'MySQL is ready!' &&
+        python manage.py migrate &&
+        python manage.py create_superuser &&
+        python manage.py seed_locations &&
+        python manage.py seed_features &&
+        python run.py runserver 0.0.0.0:8080
+      "
 
   ai-ameasure:
     build: 
@@ -76,16 +87,12 @@ services:
   frontend:
     build: 
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: mlp_frontend
     environment:
-      NODE_ENV: 'production'
+      NODE_ENV: 'development'
       NEXT_TELEMETRY_DISABLED: '1'
-      NEXT_PUBLIC_API_URL: 'http://localhost:8000'
-      NEXT_PUBLIC_ADMIN_API_URL: 'http://localhost:8080'
-      NEXT_PUBLIC_CAMERA1_URL: 'http://localhost:8001'
-      NEXT_PUBLIC_CAMERA2_URL: 'http://localhost:8002'
-      NEXT_PUBLIC_BACKEND2_URL: 'http://localhost:8003'
+      WATCHPACK_POLLING: 'true'
     ports:
       - '3000:3000'
     depends_on:
@@ -93,6 +100,9 @@ services:
       - ai-ameasure
     networks:
       - mlp_network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     restart: unless-stopped
 
 volumes:
