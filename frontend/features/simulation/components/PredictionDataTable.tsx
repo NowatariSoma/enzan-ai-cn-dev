@@ -26,16 +26,15 @@ export function PredictionDataTable({
     }
     return normalized;
   });
-  // Fixed columns to match learning page format
+  // Fixed columns to display specific prediction columns
   const tableColumns = [
-    { key: "distance_from_face" as const, header: "切羽からの距離 (m)" },
-    ...(normalizedData.length > 0 ? Object.keys(normalizedData[0])
-      .filter(key => key !== 'distance_from_face' && key !== '切羽からの距離' && key !== 'distanceFromFace')
-      .slice(0, 6) // Limit to first 6 columns for readability
-      .map(key => ({
-        key: key as const,
-        header: key.replace('_', ' '),
-      })) : [])
+    { key: "distance_from_face" as const, header: "切羽からの距離" },
+    { key: "変位量A_prediction" as const, header: "変位量A_prediction" },
+    { key: "変位量B_prediction" as const, header: "変位量B_prediction" },
+    { key: "変位量C_prediction" as const, header: "変位量C_prediction" },
+    { key: "沈下量1_prediction" as const, header: "沈下量1_prediction" },
+    { key: "沈下量2_prediction" as const, header: "沈下量2_prediction" },
+    { key: "沈下量3_prediction" as const, header: "沈下量3_prediction" }
   ];
 
   return (
